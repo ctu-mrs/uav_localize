@@ -7,19 +7,18 @@
 #include "utils.h"
 #include "LkfAssociation.h"
 
-#include <uav_detect/LocalizationParamsConfig.h>
-#include <uav_detect/LocalizedUAV.h>
+#include <uav_localize/LocalizationParamsConfig.h>
+#include <uav_localize/LocalizedUAV.h>
 
 using namespace cv;
 using namespace std;
-using namespace uav_detect;
 
 // shortcut type to the dynamic reconfigure manager template instance
-typedef mrs_lib::DynamicReconfigureMgr<uav_detect::LocalizationParamsConfig> drmgr_t;
+typedef mrs_lib::DynamicReconfigureMgr<uav_localize::LocalizationParamsConfig> drmgr_t;
 
-namespace uav_detect
+namespace uav_localize
 {
-  using Lkf = uav_detect::LkfAssociation;
+  using Lkf = uav_localize::LkfAssociation;
 
   class LocalizeSingle : public nodelet::Nodelet
   {
@@ -87,7 +86,7 @@ namespace uav_detect
       m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
-      m_pub_dbg_localized_uav = nh.advertise<uav_detect::LocalizedUAV>("dbg_localized_uav", 10);
+      m_pub_dbg_localized_uav = nh.advertise<uav_localize::LocalizedUAV>("dbg_localized_uav", 10);
       //}
 
       m_lkf_update_timer = nh.createTimer(ros::Duration(m_lkf_dt), &LocalizeSingle::lkf_update, this);
@@ -261,7 +260,7 @@ namespace uav_detect
 
           if (m_pub_dbg_localized_uav.getNumSubscribers() > 0)
           {
-            uav_detect::LocalizedUAV dbg_msg = to_dbg_message(msg, most_certain_lkf->id);
+            uav_localize::LocalizedUAV dbg_msg = to_dbg_message(msg, most_certain_lkf->id);
             m_pub_dbg_localized_uav.publish(dbg_msg);
           }
         } else
@@ -497,9 +496,9 @@ namespace uav_detect
     //}
 
     /* to_dbg_message() method //{ */
-    uav_detect::LocalizedUAV to_dbg_message(const geometry_msgs::PoseWithCovarianceStamped& orig_msg, uint32_t lkf_id)
+    uav_localize::LocalizedUAV to_dbg_message(const geometry_msgs::PoseWithCovarianceStamped& orig_msg, uint32_t lkf_id)
     {
-      uav_detect::LocalizedUAV msg;
+      uav_localize::LocalizedUAV msg;
 
       msg.header = orig_msg.header;
       msg.position.x = orig_msg.pose.pose.position.x;
@@ -641,7 +640,7 @@ namespace uav_detect
     //}
 
   }; // class LocalizeSingle : public nodelet::Nodelet
-}; // namespace uav_detect
+}; // namespace uav_localize
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(uav_detect::LocalizeSingle, nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(uav_localize::LocalizeSingle, nodelet::Nodelet)

@@ -6,13 +6,8 @@ project(uav_detect)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  std_msgs
-  nav_msgs
-  sensor_msgs
   dynamic_reconfigure
   cv_bridge
-  image_transport
-  image_geometry
   message_generation
   mrs_msgs
   tf2
@@ -53,12 +48,6 @@ set(Eigen_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIRS})
 set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 add_message_files(DIRECTORY msgs FILES
-  Detection.msg
-  Detections.msg
-  Contour.msg
-  ImagePixel.msg
-  BlobDetection.msg
-  BlobDetections.msg
   LocalizedUAV.msg
 )
 
@@ -68,12 +57,11 @@ generate_messages(DEPENDENCIES
 )
 
 generate_dynamic_reconfigure_options(
-  config/DetectionParams.cfg
   config/LocalizationParams.cfg
   )
 
 catkin_package(
-  CATKIN_DEPENDS message_runtime image_transport mrs_lib # roscpp rospy std_msgs
+  CATKIN_DEPENDS message_runtime mrs_lib # roscpp rospy std_msgs
 )
 
 ###########
@@ -89,32 +77,12 @@ include_directories(include
   # ~/git/darknet_ocl/src
 )
 
-add_library(DepthDetector src/depth_detect_node.cpp src/DepthBlobDetector.cpp)
-add_dependencies(DepthDetector
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
-target_link_libraries(DepthDetector
-  ${catkin_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-)
-
 add_library(LocalizeSingle src/localize_single_nodelet.cpp src/utils.cpp)
 add_dependencies(LocalizeSingle
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
 )
 target_link_libraries(LocalizeSingle
-  ${catkin_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-)
-
-add_executable(dbg_display_node src/dbg_display_node.cpp)
-add_dependencies(dbg_display_node
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
-target_link_libraries(dbg_display_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )

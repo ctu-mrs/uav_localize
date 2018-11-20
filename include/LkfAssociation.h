@@ -1,7 +1,7 @@
 #include "main.h"
 #include "mrs_lib/Lkf.h"
 
-namespace uav_detect
+namespace uav_localize
 {
   class LkfAssociation : public mrs_lib::Lkf
   {
