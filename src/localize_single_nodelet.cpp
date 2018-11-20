@@ -4,13 +4,11 @@
 
 #include <nodelet/nodelet.h>
 
-#include "utils.h"
 #include "LkfAssociation.h"
 
 #include <uav_localize/LocalizationParamsConfig.h>
 #include <uav_localize/LocalizedUAV.h>
 
-using namespace cv;
 using namespace std;
 
 // shortcut type to the dynamic reconfigure manager template instance
@@ -350,7 +348,7 @@ namespace uav_localize
         transform = m_tf_buffer.lookupTransform(m_world_frame, frame_name, stamp, timeout);
 
         // Obtain transform from camera frame into world
-        tf_out = tf2_to_eigen(transform.transform);
+        tf_out = tf2::transformToEigen(transform.transform);
       } catch (tf2::TransformException& ex)
       {
         ROS_WARN_THROTTLE(1.0, "[%s]: Error during transform from \"%s\" frame to \"%s\" frame.\n\tMSG: %s", m_node_name.c_str(), frame_name.c_str(), m_world_frame.c_str(), ex.what());

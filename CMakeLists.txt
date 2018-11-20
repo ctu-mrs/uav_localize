@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(uav_detect)
+project(uav_localize)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -16,23 +16,27 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_sensor_msgs
   tf2_eigen
   tf2_geometry_msgs
+  cv_bridge
+  image_geometry
   mrs_lib
   nodelet
+  uav_detect
+  uav_track
 )
 
-find_file(DISTCC_FULL_PATH distcc)
-find_file(DISTCPP_FULL_PATH distg++)
-IF (EXISTS ${DISTCC_FULL_PATH})
-  IF (EXISTS ${DISTCPP_FULL_PATH})
-    message(STATUS "Found distcc and distg++, using distributed compilation")
-    SET(CMAKE_C_COMPILER ${DISTCC_FULL_PATH})
-    SET(CMAKE_CXX_COMPILER ${DISTCPP_FULL_PATH})
-  ELSE()
-    message(WARNING "Found only distcc, but not distg++, not using distributed compilation")
-  ENDIF()
-ELSE()
-  message(STATUS "Not found distcc, not using distributed compilation")
-ENDIF()
+# find_file(DISTCC_FULL_PATH distcc)
+# find_file(DISTCPP_FULL_PATH distg++)
+# IF (EXISTS ${DISTCC_FULL_PATH})
+#   IF (EXISTS ${DISTCPP_FULL_PATH})
+#     message(STATUS "Found distcc and distg++, using distributed compilation")
+#     SET(CMAKE_C_COMPILER ${DISTCC_FULL_PATH})
+#     SET(CMAKE_CXX_COMPILER ${DISTCPP_FULL_PATH})
+#   ELSE()
+#     message(WARNING "Found only distcc, but not distg++, not using distributed compilation")
+#   ENDIF()
+# ELSE()
+#   message(STATUS "Not found distcc, not using distributed compilation")
+# ENDIF()
 
 set(CMAKE_CXX_FLAGS "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN")
@@ -77,7 +81,7 @@ include_directories(include
   # ~/git/darknet_ocl/src
 )
 
-add_library(LocalizeSingle src/localize_single_nodelet.cpp src/utils.cpp)
+add_library(LocalizeSingle src/localize_single_nodelet.cpp)
 add_dependencies(LocalizeSingle
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}

@@ -1,6 +1,10 @@
 #include "main.h"
 #include "display_utils.h"
 
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <cv_bridge/cv_bridge.h>
+
 #include <uav_localize/LocalizedUAV.h>
 
 using namespace cv;
