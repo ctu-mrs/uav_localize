@@ -7,11 +7,9 @@ project(uav_localize)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   dynamic_reconfigure
-  cv_bridge
   message_generation
   mrs_msgs
   tf2
-  tf2_ros
   tf2_msgs
   tf2_sensor_msgs
   tf2_eigen
