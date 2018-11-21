@@ -4,7 +4,8 @@
 
 #include <nodelet/nodelet.h>
 
-#include "LkfAssociation.h"
+#include "Measurement.h"
+#include "Hypothesis.h"
 
 #include <uav_localize/LocalizationParamsConfig.h>
 #include <uav_localize/LocalizedUAV.h>
@@ -16,18 +17,9 @@ typedef mrs_lib::DynamicReconfigureMgr<uav_localize::LocalizationParamsConfig> d
 
 namespace uav_localize
 {
-  using Lkf = uav_localize::LkfAssociation;
-
   class LocalizeSingle : public nodelet::Nodelet
   {
   private:
-    /* measurement_t helper struct //{ */
-    struct measurement_t
-    {
-      Eigen::Vector3d position;
-      Eigen::Matrix3d covariance;
-    };
-    //}
 
   public:
     // --------------------------------------------------------------
@@ -91,7 +83,7 @@ namespace uav_localize
       m_process_loop_timer = nh.createTimer(ros::Rate(process_loop_rate), &LocalizeSingle::process_loop, this);
       m_publish_loop_timer = nh.createTimer(ros::Rate(publish_loop_rate), &LocalizeSingle::publish_loop, this);
 
-      m_last_lkf_id = 0;
+      m_last_hyp_id = 0;
 
       cout << "----------------------------------------------------------" << std::endl;
     }
@@ -112,17 +104,17 @@ namespace uav_localize
         if (got_depth_detections)
         {
           const uav_detect::Detections last_detections_msg = m_sh_detections_ptr->get_data();
-          std::vector<measurement_t> measurements = measurements_from_message(last_detections_msg);
-          std::lock_guard<std::mutex> lck(m_lkfs_mtx);
-          update_lkfs(measurements, m_lkfs);
+          std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
+          std::lock_guard<std::mutex> lck(m_hyps_mtx);
+          update_hyps(measurements, m_hyps);
         }
 
         if (got_rgb_tracking)
         {
           const uav_track::Trackings last_trackings_msg = m_sh_trackings_ptr->get_data();
-          std::vector<measurement_t> measurements = measurements_from_message(last_trackings_msg);
-          std::lock_guard<std::mutex> lck(m_lkfs_mtx);
-          update_lkfs(measurements, m_lkfs);
+          std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
+          std::lock_guard<std::mutex> lck(m_hyps_mtx);
+          update_hyps(measurements, m_hyps);
         }
       }
     }
@@ -131,31 +123,31 @@ namespace uav_localize
     /* publish_loop() method //{ */
     void publish_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
-      Lkf const* most_certain_lkf = nullptr;
+      Hypothesis const* most_certain_hyp = nullptr;
       {
-        std::lock_guard<std::mutex> lck(m_lkfs_mtx);
-        kick_out_uncertain_lkfs(m_lkfs);
-        most_certain_lkf = find_most_certain_lkf(m_lkfs);
+        std::lock_guard<std::mutex> lck(m_hyps_mtx);
+        kick_out_uncertain_hyps(m_hyps);
+        most_certain_hyp = find_most_certain_hyp(m_hyps);
       }
 
-      /* Publish message of the most likely LKF (if found) //{ */
-      if (most_certain_lkf != nullptr)
+      /* Publish message of the most likely Hypothesis (if found) //{ */
+      if (most_certain_hyp != nullptr)
       {
-        geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_lkf, ros::Time::now());
+        geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_hyp, ros::Time::now());
         m_pub_localized_uav.publish(msg);
 
         if (m_pub_dbg_localized_uav.getNumSubscribers() > 0)
         {
-          uav_localize::LocalizedUAV dbg_msg = to_dbg_message(msg, most_certain_lkf->id);
+          uav_localize::LocalizedUAV dbg_msg = to_dbg_message(msg, most_certain_hyp->id);
           m_pub_dbg_localized_uav.publish(dbg_msg);
         }
       }
       //}
 
-      std::string most_certain_lkf_name = "none";
-      if (most_certain_lkf != nullptr)
-        most_certain_lkf_name = "#" + std::to_string(most_certain_lkf->id);
-      ROS_INFO_STREAM_THROTTLE(1.0, "[" << m_node_name << "]: #LKFs: " << m_lkfs.size() << " | pub. LKF: " << most_certain_lkf_name);
+      std::string most_certain_hyp_name = "none";
+      if (most_certain_hyp != nullptr)
+        most_certain_hyp_name = "#" + std::to_string(most_certain_hyp->id);
+      ROS_INFO_STREAM_THROTTLE(1.0, "[" << m_node_name << "]: #hyps: " << m_hyps.size() << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
 
@@ -167,12 +159,12 @@ namespace uav_localize
       lkf_R_t R = create_R(dt);
 
       {
-        std::lock_guard<std::mutex> lck(m_lkfs_mtx);
-        for (auto& lkf : m_lkfs)
+        std::lock_guard<std::mutex> lck(m_hyps_mtx);
+        for (auto& hyp : m_hyps)
         {
-          lkf.setA(A);
-          lkf.setR(R);
-          lkf.iterateWithoutCorrection();
+          hyp.lkf.setA(A);
+          hyp.lkf.setR(R);
+          hyp.lkf.iterateWithoutCorrection();
         }
       }
     }
@@ -229,69 +221,78 @@ namespace uav_localize
     }
     //}
 
-    /* detection_to_measurement() method overloads //{ */
-    measurement_t detection_to_measurement(const uav_detect::Detection& det)
+    /* detection_to_measurement() method //{ */
+    /* position_from_detection() method overloads //{ */
+    Eigen::Vector3d position_from_detection(const uav_detect::Detection& det)
     {
-      measurement_t ret;
-
-      /* calculate 3D position //{ */
-      {
-        const double u = det.x * det.roi.width + det.roi.x_offset;
-        const double v = det.y * det.roi.height + det.roi.y_offset;
-        const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
-        const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
-        ret.position << x, y, 1.0;
-        ret.position *= det.depth;
-      }
-      //}
-
-      /* calculate 3D covariance //{ */
-      {
-        ret.covariance = ret.covariance.Identity();
-        const double xy_covariance_coeff = m_drmgr_ptr->config.depth_detections__xy_covariance_coeff;
-        const double z_covariance_coeff = m_drmgr_ptr->config.depth_detections__z_covariance_coeff;
-        Eigen::Matrix3d pos_cov = calc_position_covariance(ret.position, xy_covariance_coeff, z_covariance_coeff);
-        ret.covariance.block<3, 3>(0, 0) = pos_cov;
-      }
-      //}
-
+      Eigen::Vector3d ret;
+      const double u = det.x * det.roi.width + det.roi.x_offset;
+      const double v = det.y * det.roi.height + det.roi.y_offset;
+      const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
+      const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
+      ret << x, y, 1.0;
+      ret *= det.depth;
       return ret;
     }
-
-    measurement_t detection_to_measurement(const uav_track::Tracking& trk)
+    Eigen::Vector3d position_from_detection(const uav_track::Tracking& det)
     {
-      measurement_t ret;
+      Eigen::Vector3d ret;
+      const double u = det.x * det.roi.width + det.roi.x_offset;
+      const double v = det.y * det.roi.height + det.roi.y_offset;
+      const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
+      const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
+      ret << x, y, 1.0;
+      ret *= det.estimated_distance;
+      return ret;
+    }
+    //}
 
-      /* calculate 3D position //{ */
-      {
-        const double u = trk.x * trk.roi.width + trk.roi.x_offset;
-        const double v = trk.y * trk.roi.height + trk.roi.y_offset;
-        const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
-        const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
-        ret.position << x, y, 1.0;
-        ret.position *= trk.estimated_distance;
-      }
-      //}
+    /* position_from_detection() method overloads //{ */
+    Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const uav_detect::Detection& det, const Eigen::Vector3d& position)
+    {
+      Eigen::Matrix3d ret;
+      const double xy_covariance_coeff = m_drmgr_ptr->config.depth_detections__xy_covariance_coeff;
+      const double z_covariance_coeff = m_drmgr_ptr->config.depth_detections__z_covariance_coeff;
+      ret = calc_position_covariance(position, xy_covariance_coeff, z_covariance_coeff);
+      return ret;
+    }
+    Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const uav_track::Tracking& det, const Eigen::Vector3d& position)
+    {
+      Eigen::Matrix3d ret;
+      const double xy_covariance_coeff = m_drmgr_ptr->config.depth_detections__xy_covariance_coeff;
+      const double z_covariance_coeff = m_drmgr_ptr->config.depth_detections__z_covariance_coeff;
+      ret = calc_position_covariance(position, xy_covariance_coeff, z_covariance_coeff);
+      return ret;
+    }
+    //}
 
-      /* calculate 3D covariance //{ */
-      {
-        ret.covariance = ret.covariance.Identity();
-        const double xy_covariance_coeff = m_drmgr_ptr->config.rgb_trackings__xy_covariance_coeff;
-        const double z_covariance_coeff = m_drmgr_ptr->config.rgb_trackings__z_covariance_coeff;
-        Eigen::Matrix3d pos_cov = calc_position_covariance(ret.position, xy_covariance_coeff, z_covariance_coeff);
-        ret.covariance.block<3, 3>(0, 0) = pos_cov;
-      }
-      //}
+    /*  detection_source() method overloads//{ */
+    Measurement::source_t source_of_detection([[maybe_unused]] const uav_detect::Detection&)
+    {
+      return Measurement::source_t::depth_detection;
+    }
+    Measurement::source_t source_of_detection([[maybe_unused]] const uav_track::Tracking&)
+    {
+      return Measurement::source_t::rgb_tracking;
+    }
+    //}
 
+    template <typename Detection>
+    Measurement detection_to_measurement(const Detection& det)
+    {
+      Measurement ret;
+      ret.position = position_from_detection(det);
+      ret.covariance = covariance_from_detection(det, ret.position);
+      ret.source = source_of_detection(det);
       return ret;
     }
     //}
 
     /* measurements_from_message() method //{ */
     template <typename MessageType>
-    std::vector<measurement_t> measurements_from_message(const MessageType& msg)
+    std::vector<Measurement> measurements_from_message(const MessageType& msg)
     {
-      std::vector<measurement_t> ret;
+      std::vector<Measurement> ret;
       std::string sensor_frame = msg.header.frame_id;
       // Construct a new world to camera transform
       Eigen::Affine3d s2w_tf;
@@ -303,10 +304,10 @@ namespace uav_localize
       const auto& dets = get_detections(msg);
       ret.reserve(dets.size());
 
-      /* Calculate 3D positions and covariances of the detections, push them to the output vector //{ */
+      /* Construct the measurements, push them to the output vector //{ */
       for (const auto& det : dets)
       {
-        measurement_t measurement = detection_to_measurement(det);
+        Measurement measurement = detection_to_measurement(det);
 
         measurement.position = s2w_tf * measurement.position;
         if (!position_valid(measurement.position))
@@ -331,40 +332,37 @@ namespace uav_localize
     }
     //}
 
-    /* update_lkfs() method //{ */
-    // this method updates the LKFs with the supplied measurements and creates new ones
+    /* update_hyps() method //{ */
+    // this method updates the hypothesis with the supplied measurements and creates new ones
     // for new measurements
-    void update_lkfs(const std::vector<measurement_t>& measurements, std::list<Lkf>& lkfs)
+    void update_hyps(const std::vector<Measurement>& measurements, std::list<Hypothesis>& hyps)
     {
       vector<int> meas_used(measurements.size(), 0);
 
       /* Assign a measurement to each LKF based on the smallest divergence and update the LKF //{ */
-      for (auto& lkf : lkfs)
+      for (auto& hyp : hyps)
       {
         double divergence;
-        size_t closest_it = find_closest_measurement(lkf, measurements, divergence);
+        size_t closest_it = find_closest_measurement(hyp, measurements, divergence);
 
         // Evaluate whether the divergence is small enough to justify the update
         if (divergence < m_drmgr_ptr->config.depth_detections__max_update_divergence)
         {
-          Eigen::Vector3d closest_pos = measurements.at(closest_it).position;
-          Eigen::Matrix3d closest_cov = measurements.at(closest_it).covariance;
-          lkf.setMeasurement(closest_pos, closest_cov);
-          lkf.doCorrection(true);
+          hyp.correction(measurements.at(closest_it));
           meas_used.at(closest_it)++;
         }
       }
       //}
 
-      /* Instantiate new LKFs for unused measurements (these are not considered as candidates for the most certain LKF) //{ */
+      /* Instantiate new hypotheses for unused measurements (these are not considered as candidates for the most certain hypothesis) //{ */
       {
         for (size_t it = 0; it < measurements.size(); it++)
         {
           if (meas_used.at(it) < 1)
           {
-            Lkf new_lkf = create_new_lkf(measurements.at(it), m_last_lkf_id, m_drmgr_ptr->config.init_vel_cov);
-            m_lkfs.push_back(new_lkf);
-            /* new_lkfs++; */
+            Hypothesis new_hyp = create_new_hyp(measurements.at(it), m_last_hyp_id, m_drmgr_ptr->config.init_vel_cov);
+            m_hyps.push_back(new_hyp);
+            /* new_hyps++; */
           }
         }
       }
@@ -372,53 +370,53 @@ namespace uav_localize
     }
     //}
 
-    /* kick_out_uncertain_lkfs() method //{ */
-    void kick_out_uncertain_lkfs(std::list<Lkf>& lkfs) const
+    /* kick_out_uncertain_hyps() method //{ */
+    void kick_out_uncertain_hyps(std::list<Hypothesis>& hyps) const
     {
-      for (list<Lkf>::iterator it = std::begin(lkfs); it != std::end(lkfs); it++)
+      for (list<Hypothesis>::iterator it = std::begin(hyps); it != std::end(hyps); it++)
       {
-        auto& lkf = *it;
+        auto& hyp = *it;
 
         // First, check the uncertainty
-        double uncertainty = calc_LKF_uncertainty(lkf);
-        if (uncertainty > m_drmgr_ptr->config.max_lkf_uncertainty || std::isnan(uncertainty))
+        double uncertainty = calc_hyp_uncertainty(hyp);
+        if (uncertainty > m_drmgr_ptr->config.max_hyp_uncertainty || std::isnan(uncertainty))
         {
-          it = lkfs.erase(it);
+          it = hyps.erase(it);
           it--;
-          /* kicked_out_lkfs++; */
+          /* kicked_out_hyps++; */
         }
       }
     }
     //}
 
-    /* find_most_certain_lkf() method //{ */
-    Lkf const* find_most_certain_lkf(const std::list<Lkf>& lkfs) const
+    /* find_most_certain_hyp() method //{ */
+    Hypothesis const* find_most_certain_hyp(const std::list<Hypothesis>& hyps) const
     {
       // the LKF must have received at least min_corrs_to_consider corrections
-      // in order to be considered for the search of the most certain LKF
+      // in order to be considered for the search of the most certain hypothesis
       int max_corrections = m_drmgr_ptr->config.min_corrs_to_consider;
       double picked_uncertainty = std::numeric_limits<double>::max();
-      Lkf const* most_certain_lkf = nullptr;
+      Hypothesis const* most_certain_hyp = nullptr;
 
-      for (auto& lkf : lkfs)
+      for (auto& hyp : hyps)
       {
-        double uncertainty = calc_LKF_uncertainty(lkf);
+        double uncertainty = calc_hyp_uncertainty(hyp);
 
-        // The LKF is picked if it has higher number of corrections than the found maximum.
+        // The hypothesis is picked if it has higher number of corrections than the found maximum.
         // If it has the same number of corrections as a previously found maximum then uncertainties are
         // compared to decide which is going to be picked.
         if (
-            // current LKF has higher number of corrections as is the current max. found
-            lkf.getNCorrections() > max_corrections
-            // OR cur LKF has same number of corrections but lower uncertainty
-            || (lkf.getNCorrections() == max_corrections && uncertainty < picked_uncertainty))
+            // current hypothesis has higher number of corrections as is the current max. found
+            hyp.get_n_corrections() > max_corrections
+            // OR cur hypothesis has same number of corrections but lower uncertainty
+            || (hyp.get_n_corrections() == max_corrections && uncertainty < picked_uncertainty))
         {
-          most_certain_lkf = &lkf;
-          max_corrections = lkf.getNCorrections();
+          most_certain_hyp = &hyp;
+          max_corrections = hyp.get_n_corrections();
           picked_uncertainty = uncertainty;
         }
       }
-      return most_certain_lkf;
+      return most_certain_hyp;
     }
     //}
 
@@ -507,17 +505,17 @@ namespace uav_localize
     }
     //}
 
-    /* calc_LKF_uncertainty() method //{ */
-    static double calc_LKF_uncertainty(const Lkf& lkf)
+    /* calc_hyp_uncertainty() method //{ */
+    static double calc_hyp_uncertainty(const Hypothesis& hyp)
     {
-      Eigen::Matrix3d position_covariance = lkf.getCovariance().block<3, 3>(0, 0);
-      double determinant = position_covariance.determinant();
+      const Eigen::Matrix3d& position_covariance = hyp.get_position_covariance();
+      const double determinant = position_covariance.determinant();
       return sqrt(determinant);
     }
     //}
 
-    /* calc_LKF_meas_divergence() method //{ */
-    static double calc_LKF_meas_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+    /* calc_hyp_meas_divergence() method //{ */
+    static double calc_hyp_meas_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
     {
       return kullback_leibler_divergence(mu0, sigma0, mu1, sigma1);
     }
@@ -525,14 +523,14 @@ namespace uav_localize
 
     /* find_closest_measurement() method //{ */
     /* returns position of the closest measurement in the pos_covs vector */
-    static size_t find_closest_measurement(const Lkf& lkf, const std::vector<measurement_t>& pos_covs, double& min_divergence_out)
+    static size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_divergence_out)
     {
-      const Eigen::Vector3d& lkf_pos = lkf.getStates().block<3, 1>(0, 0);
-      const Eigen::Matrix3d& lkf_cov = lkf.getCovariance().block<3, 3>(0, 0);
+      const Eigen::Vector3d hyp_pos = hyp.get_position();
+      const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance();
       double min_divergence = std::numeric_limits<double>::max();
       size_t min_div_it = 0;
 
-      // Find measurement with smallest divergence from this LKF and assign the measurement to it
+      // Find measurement with smallest divergence from this hypothesis and assign the measurement to it
       for (size_t it = 0; it < pos_covs.size(); it++)
       {
         const auto& pos_cov = pos_covs.at(it);
@@ -540,7 +538,7 @@ namespace uav_localize
           ROS_ERROR("Covariance of LKF contains NaNs!");
         const Eigen::Vector3d& det_pos = pos_cov.position;
         const Eigen::Matrix3d& det_cov = pos_cov.covariance;
-        const double divergence = calc_LKF_meas_divergence(det_pos, det_cov, lkf_pos, lkf_cov);
+        const double divergence = calc_hyp_meas_divergence(det_pos, det_cov, hyp_pos, hyp_cov);
 
         if (divergence < min_divergence)
         {
@@ -554,7 +552,7 @@ namespace uav_localize
     //}
 
     /* create_message() method //{ */
-    geometry_msgs::PoseWithCovarianceStamped create_message(const Lkf& lkf, ros::Time stamp) const
+    geometry_msgs::PoseWithCovarianceStamped create_message(const Hypothesis& hyp, ros::Time stamp) const
     {
       geometry_msgs::PoseWithCovarianceStamped msg;
 
@@ -562,7 +560,7 @@ namespace uav_localize
       msg.header.stamp = stamp;
 
       {
-        const Eigen::Vector3d position = lkf.getStates().block<3, 1>(0, 0);
+        const Eigen::Vector3d position = hyp.get_position();
         msg.pose.pose.position.x = position(0);
         msg.pose.pose.position.y = position(1);
         msg.pose.pose.position.z = position(2);
@@ -571,7 +569,7 @@ namespace uav_localize
       msg.pose.pose.orientation.w = 1.0;
 
       {
-        const Eigen::Matrix3d covariance = lkf.getCovariance().block<3, 3>(0, 0);
+        const Eigen::Matrix3d covariance = hyp.get_position_covariance();
         for (int r = 0; r < 6; r++)
         {
           for (int c = 0; c < 6; c++)
@@ -589,7 +587,7 @@ namespace uav_localize
     //}
 
     /* to_dbg_message() method //{ */
-    static uav_localize::LocalizedUAV to_dbg_message(const geometry_msgs::PoseWithCovarianceStamped& orig_msg, uint32_t lkf_id)
+    static uav_localize::LocalizedUAV to_dbg_message(const geometry_msgs::PoseWithCovarianceStamped& orig_msg, uint32_t hyp_id)
     {
       uav_localize::LocalizedUAV msg;
 
@@ -597,7 +595,7 @@ namespace uav_localize
       msg.position.x = orig_msg.pose.pose.position.x;
       msg.position.y = orig_msg.pose.pose.position.y;
       msg.position.z = orig_msg.pose.pose.position.z;
-      msg.lkf_id = lkf_id;
+      msg.hyp_id = hyp_id;
 
       return msg;
     }
@@ -613,10 +611,10 @@ namespace uav_localize
     //}
 
   private:
-    /* LKF - related member variables //{ */
-    std::mutex m_lkfs_mtx;  // mutex for synchronization of the m_lkfs variable
-    std::list<Lkf> m_lkfs;  // all currently active LKFs
-    int m_last_lkf_id;      // ID of the last created LKF - used when creating a new LKF to generate a new unique ID
+    /* Hypothesis - related member variables //{ */
+    std::mutex m_hyps_mtx;  // mutex for synchronization of the m_hyps variable
+    std::list<Hypothesis> m_hyps;  // all currently active hypotheses
+    int m_last_hyp_id;      // ID of the last created hypothesis - used when creating a new hypothesis to generate a new unique ID
     //}
 
     /* Definitions of the LKF (consts, typedefs, etc.) //{ */
@@ -657,8 +655,8 @@ namespace uav_localize
     }
     //}
 
-    /* create_new_lkf() method //{ */
-    static Lkf create_new_lkf(const measurement_t& initialization, int& last_lkf_id, const double init_vel_cov)
+    /* create_new_hyp() method //{ */
+    static Hypothesis create_new_hyp(const Measurement& initialization, int& last_hyp_id, const double init_vel_cov)
     {
       const lkf_A_t A;  // changes in dependence on the measured dt, so leave blank for now
       const lkf_B_t B;  // zero rows zero cols matrix
@@ -666,7 +664,7 @@ namespace uav_localize
       const lkf_R_t R;  // depends on the measured dt, so leave blank for now
       const lkf_Q_t Q;  // depends on the measurement, so leave blank for now
 
-      Lkf new_lkf(last_lkf_id, LocalizeSingle::c_n_states, LocalizeSingle::c_n_inputs, LocalizeSingle::c_n_measurements, A, B, R, Q, P);
+      Hypothesis new_hyp(last_hyp_id, LocalizeSingle::c_n_states, LocalizeSingle::c_n_inputs, LocalizeSingle::c_n_measurements, A, B, R, Q, P);
 
       // Initialize the LKF using the new measurement
       lkf_x_t init_state;
@@ -677,9 +675,9 @@ namespace uav_localize
       init_state_cov.block<3, 3>(0, 0) = initialization.covariance;
       init_state_cov.block<3, 3>(3, 3) = init_vel_cov * Eigen::Matrix3d::Identity();
 
-      new_lkf.setStates(init_state);
-      new_lkf.setCovariance(init_state_cov);
-      return new_lkf;
+      new_hyp.lkf.setStates(init_state);
+      new_hyp.lkf.setCovariance(init_state_cov);
+      return new_hyp;
     }
     //}
 
@@ -690,7 +688,7 @@ namespace uav_localize
 
     /* kullback_leibler_divergence() method //{ */
     // This method calculates the kullback-leibler divergence of two three-dimensional normal distributions.
-    // It is used for deciding which measurement to use for which LKF.
+    // It is used for deciding which measurement to use for which hypothesis.
     static double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
                                               const Eigen::Matrix3d& sigma1)
     {

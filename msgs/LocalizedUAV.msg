@@ -3,4 +3,4 @@
 
 std_msgs/Header     header
 geometry_msgs/Point position
-uint32              lkf_id
+uint32              hyp_id
