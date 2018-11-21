@@ -11,7 +11,7 @@
   <arg name="verbose" default="true"/>
   <arg name="vehicle" default="iris"/>
   <arg name="est" default="ekf2"/>
-  <arg name="world_name" default="$(find uav_detect)/gazebo/worlds/depth_detection.world"/> 
+  <arg name="world_name" default="$(find uav_localize)/gazebo/worlds/depth_detection.world"/> 
 
   <!-- set use_sim_time flag -->
   <group if="$(arg use_sim_time)">
@@ -29,7 +29,7 @@
   <arg     if="$(arg debug)" name="script_type" value="debug"/>
 
   <!-- specify additional model path -->
-  <env name="GAZEBO_MODEL_PATH" value="$(env GAZEBO_MODEL_PATH):$(find uav_detect)/gazebo/models" />
+  <env name="GAZEBO_MODEL_PATH" value="$(env GAZEBO_MODEL_PATH):$(find uav_localize)/gazebo/models" />
 
   <node name="realsense_color_tf_publisher" pkg="tf2_ros" type="static_transform_publisher" args="0.3 0 -0.05 1.57 3.14 1.57 fcu_uav1 color_realsense_uav1" />
   <node name="realsense_depth_tf_publisher" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 color_realsense_uav1 depth_realsense_uav1" />

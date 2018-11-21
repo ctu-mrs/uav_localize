@@ -7,14 +7,14 @@
   <arg     if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
 
   <arg name="simulation" default="$(optenv SIMULATION false)" />
-  <arg unless="$(arg simulation)" name="config_file" value="$(find uav_detect)/config/localization_params_F550.yaml"/>
-  <arg     if="$(arg simulation)" name="config_file" value="$(find uav_detect)/config/sim_localization_params_F550.yaml"/>
+  <arg unless="$(arg simulation)" name="config_file" value="$(find uav_localize)/config/localization_params_F550.yaml"/>
+  <arg     if="$(arg simulation)" name="config_file" value="$(find uav_localize)/config/sim_localization_params_F550.yaml"/>
   <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/rs_d435/aligned_depth_to_color/camera_info/"/>
   <arg     if="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/realsense/camera/depth/camera_info/"/>
 
   <arg name="standalone" default="true" />
-  <arg name="manager" default="detection_nodelet_manager" />
-  <arg name="nodelet" value="uav_detect/LocalizeSingle" />
+  <arg name="manager" default="localization_nodelet_manager" />
+  <arg name="nodelet" value="uav_localize/LocalizeSingle" />
   <arg unless="$(arg standalone)" name="nodelet_load" value="load $(arg nodelet) $(arg manager)"/>
   <arg     if="$(arg standalone)" name="nodelet_load" value="standalone $(arg nodelet)"/>
 
