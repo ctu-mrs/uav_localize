@@ -21,12 +21,15 @@
 
   <group ns="$(arg uav_name)">
     
-    <node pkg="nodelet" type="nodelet" name="uav_localization" args="$(arg nodelet_load)" output="screen" launch-prefix="$(arg launch_prefix)" >>
+    <node pkg="nodelet" type="nodelet" name="uav_localization" args="$(arg nodelet_load)" output="screen" launch-prefix="$(arg launch_prefix)" >
+      <param name="num_worker_threads" value="16" />
       
+      <rosparam file="$(find uav_localize)/config/localization_params_common.yaml" />
       <rosparam file="$(arg config_file)" />
       <param name="uav_name" value="$(arg uav_name)" />
     
       <remap from="~detections" to="/$(arg uav_name)/uav_detection/detections" />
+      <remap from="~trackings" to="/$(arg uav_name)/uav_tracking/trackings" />
       <remap from="~camera_info" to="$(arg cinfo_topic)" />
 
     </node>

@@ -3,18 +3,31 @@
 ## Measurement parameters
 # Minimal height of the measurement to be considered valid
 min_detection_height: 1.0  # meters above zero altitude
-# Covariance of the detection measurement in the XY direction (in camera CS)
-xy_covariance_coeff: 0.1
-# Covariance coefficient of the detection measurement in the Z direction (in camera CS)
-# This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
-z_covariance_coeff: 0.1
+# Covariance parameters, applied to depth detection measurements
+depth_detections:
+  # Covariance of the detection measurement in the XY direction (in camera CS)
+  xy_covariance_coeff: 0.1
+  # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
+  # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
+  z_covariance_coeff: 0.1
+  # Whether to calculate the divergence in 3D space (using projected position) or in 2D space (in the image)
+  use_2D_divergence: false
+  # Maximal divergence between a measurement and a LKF for the measurement to be considered
+  # for association to a LKF
+  max_update_divergence: 5.0
 
-## Correction parameters
-# Maximal divergence between a measurement and a LKF for the measurement to be considered
-# for association to a LKF
-max_update_divergence: 5.0
-# If a LKF exceeds this uncertainty, it is kicked out of the pool of active LKFs.
-max_lkf_uncertainty: 3.0
+# Covariance parameters, applied to rgb tracking measurements
+rgb_trackings:
+  # Covariance of the detection measurement in the XY direction (in camera CS)
+  xy_covariance_coeff: 0.3
+  # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
+  # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
+  z_covariance_coeff: 0.5
+  # Whether to calculate the divergence in 3D space (using projected position) or in 2D space (in the image)
+  use_2D_divergence: true
+  # Maximal divergence between a measurement and a LKF for the measurement to be considered
+  # for association to a LKF
+  max_update_divergence: 5.0
 
 ## Prediction parameters
 # Process noise of the LKF position states
@@ -23,6 +36,8 @@ lkf_process_noise_pos: 1.0  # it is scaled by dt in the code, so should it be gi
 lkf_process_noise_vel: 3.0  # it is scaled by dt in the code, so should it be given scaled to seconds here
 
 ## other LKF parameters
+# If a LKF exceeds this uncertainty, it is kicked out of the pool of active LKFs.
+max_lkf_uncertainty: 3.0
 # Initial covariance of velocity states at LKF initialization
 init_vel_cov: 4.0
 # A LKF must have received at least this many corrections before it is considered as

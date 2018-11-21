@@ -1,0 +1,3 @@
+
+process_loop_rate: 200 # Hz
+publish_loop_rate: 25 # Hz
