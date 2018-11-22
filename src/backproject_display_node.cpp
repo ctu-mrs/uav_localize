@@ -11,6 +11,42 @@ using namespace cv;
 using namespace std;
 using namespace uav_localize;
 
+cv::Scalar get_color(int id)
+{
+  const cv::Scalar colors[] =
+  {
+    cv::Scalar(255, 0, 0),
+    cv::Scalar(0, 255, 0),
+    cv::Scalar(0, 0, 255),
+    cv::Scalar(255, 255, 0),
+    cv::Scalar(255, 0, 255),
+    cv::Scalar(0, 255, 255),
+    cv::Scalar(255, 128, 128),
+    cv::Scalar(128, 128, 255),
+    cv::Scalar(128, 255, 128)
+  };
+  const int n_colors = 9;
+  return colors[id % n_colors];
+}
+
+struct Source {int id; std::string name;};
+void draw_legend(cv::Mat& img)
+{
+  static const std::vector<Source> possible_sources =
+  {
+    {uav_localize::LocalizedUAV::SOURCE_DEPTH_DETECTION, "depth detection"},
+    {uav_localize::LocalizedUAV::SOURCE_RGB_TRACKING, "rgb tracking"}
+  };
+  int offset = 1;
+  cv::putText(img, "sources:", cv::Point(25, 30*offset++), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
+  for (auto source : possible_sources)
+  {
+    cv::Scalar color = get_color(source.id);
+    cv::putText(img, source.name, cv::Point(35, 30*offset++), FONT_HERSHEY_SIMPLEX, 0.8, color, 2);
+  }
+}
+
+
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "backproject_display_node");
@@ -90,11 +126,14 @@ int main(int argc, char** argv)
         cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, "bgr8");
         cv::Mat img = img_ros2->image;
 
-        cv::circle(img, pt2d, 40, Scalar(0, 0, 255), 2);
+        cv::Scalar color = get_color(loc_uav.last_source);
+
+        draw_legend(img);
+        cv::circle(img, pt2d, 40, color, 2);
         cv::line(img, cv::Point(pt2d.x - 15, pt2d.y), cv::Point(pt2d.x + 15, pt2d.y), Scalar(0, 0, 220));
         cv::line(img, cv::Point(pt2d.x, pt2d.y - 15), cv::Point(pt2d.x, pt2d.y + 15), Scalar(0, 0, 220));
-        cv::putText(img, "distance: " + std::to_string(dist), cv::Point(pt2d.x + 35, pt2d.y + 30), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 255), 2);
-        cv::putText(img, "ID: " + std::to_string(loc_uav.hyp_id), cv::Point(pt2d.x + 35, pt2d.y - 30), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 255), 2);
+        cv::putText(img, "distance: " + std::to_string(dist), cv::Point(pt2d.x + 35, pt2d.y + 30), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+        cv::putText(img, "ID: " + std::to_string(loc_uav.hyp_id), cv::Point(pt2d.x + 35, pt2d.y - 30), FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
 
         cv::imshow(window_name, img);
         cv::waitKey(1);

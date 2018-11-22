@@ -20,11 +20,13 @@ namespace uav_localize
 
       mrs_lib::Lkf lkf;
       const int id;
+      Measurement::source_t last_source;
 
       void correction(const Measurement& meas)
       {
         if (meas.reliable())
           m_n_corrections++;
+        last_source = meas.source;
         lkf.setMeasurement(meas.position, meas.covariance);
         lkf.doCorrection();
       }

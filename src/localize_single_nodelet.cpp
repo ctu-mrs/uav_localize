@@ -136,7 +136,7 @@ namespace uav_localize
 
         if (m_pub_dbg_localized_uav.getNumSubscribers() > 0)
         {
-          uav_localize::LocalizedUAV dbg_msg = to_dbg_message(msg, most_certain_hyp->id);
+          uav_localize::LocalizedUAV dbg_msg = to_dbg_message(*most_certain_hyp, msg);
           m_pub_dbg_localized_uav.publish(dbg_msg);
         }
       }
@@ -585,7 +585,7 @@ namespace uav_localize
     //}
 
     /* to_dbg_message() method //{ */
-    static uav_localize::LocalizedUAV to_dbg_message(const geometry_msgs::PoseWithCovarianceStamped& orig_msg, uint32_t hyp_id)
+    static uav_localize::LocalizedUAV to_dbg_message(const Hypothesis& hyp, const geometry_msgs::PoseWithCovarianceStamped& orig_msg)
     {
       uav_localize::LocalizedUAV msg;
 
@@ -593,7 +593,8 @@ namespace uav_localize
       msg.position.x = orig_msg.pose.pose.position.x;
       msg.position.y = orig_msg.pose.pose.position.y;
       msg.position.z = orig_msg.pose.pose.position.z;
-      msg.hyp_id = hyp_id;
+      msg.hyp_id = hyp.id;
+      msg.last_source = hyp.last_source;
 
       return msg;
     }
