@@ -22,6 +22,10 @@ int main(int argc, char** argv)
   mrs_lib::SubscribeHandlerPtr<sensor_msgs::ImageConstPtr> sh_img;
   mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfo> sh_cinfo;
 
+  double detection_timeout;
+  nh.param("detection_timeout", detection_timeout, 0.5);
+  ROS_INFO("[%s]: detection_timeout: %f", ros::this_node::getName().c_str(), detection_timeout);
+
   mrs_lib::SubscribeMgr smgr(nh);
   sh_pose = smgr.create_handler_threadsafe<uav_localize::LocalizedUAV>("dbg_localized_uav", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
   sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
@@ -97,7 +101,7 @@ int main(int argc, char** argv)
       } else
       {
         sensor_msgs::ImageConstPtr img_ros = img_buffer.back();
-        if (abs((img_ros->header.stamp - last_pose_stamp).toSec()) > 0.2)
+        if (abs((img_ros->header.stamp - last_pose_stamp).toSec()) > detection_timeout)
         {
           cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, "bgr8");
           cv::Mat img = img_ros2->image;

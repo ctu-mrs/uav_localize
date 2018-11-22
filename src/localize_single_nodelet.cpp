@@ -19,8 +19,6 @@ namespace uav_localize
 {
   class LocalizeSingle : public nodelet::Nodelet
   {
-  private:
-
   public:
     // --------------------------------------------------------------
     // |                 main implementation methods                |
