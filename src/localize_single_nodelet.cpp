@@ -77,11 +77,20 @@ namespace uav_localize
       m_pub_dbg_localized_uav = nh.advertise<uav_localize::LocalizedUAV>("dbg_localized_uav", 10);
       //}
 
+      /* Initialize other variables //{ */
+      m_depth_detections = 0;
+      m_rgb_trackings = 0;
+      m_most_certain_hyp_name = "none";
+      
+      m_last_hyp_id = 0;
+      //}
+
+      /* Initialize timers //{ */
       m_lkf_update_loop_timer = nh.createTimer(ros::Duration(m_lkf_dt), &LocalizeSingle::lkf_update_loop, this);
       m_process_loop_timer = nh.createTimer(ros::Rate(process_loop_rate), &LocalizeSingle::process_loop, this);
       m_publish_loop_timer = nh.createTimer(ros::Rate(publish_loop_rate), &LocalizeSingle::publish_loop, this);
-
-      m_last_hyp_id = 0;
+      m_info_loop_timer = nh.createTimer(ros::Rate(1.0), &LocalizeSingle::info_loop, this);
+      //}
 
       cout << "----------------------------------------------------------" << std::endl;
     }
@@ -96,23 +105,51 @@ namespace uav_localize
       const bool should_process = got_something_to_process && m_sh_cinfo_ptr->has_data();
       if (should_process)
       {
+        /* Initialize the camera model if not initialized yet //{ */
         if (!m_sh_cinfo_ptr->used_data())
           m_camera_model.fromCameraInfo(m_sh_cinfo_ptr->get_data());
+        //}
 
         if (got_depth_detections)
         {
-          const uav_detect::Detections last_detections_msg = m_sh_detections_ptr->get_data();
-          std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
-          std::lock_guard<std::mutex> lck(m_hyps_mtx);
-          update_hyps(measurements, m_hyps);
+          /* Update the hypotheses using this message //{ */
+          {
+            const uav_detect::Detections last_detections_msg = m_sh_detections_ptr->get_data();
+            const std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
+            {
+              std::lock_guard<std::mutex> lck(m_hyps_mtx);
+              update_hyps(measurements, m_hyps);
+            }
+          }
+          //}
+
+          /* Update the number of received depth detections //{ */
+          {
+            std::lock_guard<std::mutex> lck(m_stat_mtx);
+            m_depth_detections++;
+          }
+          //}
         }
 
         if (got_rgb_tracking)
         {
-          const uav_track::Trackings last_trackings_msg = m_sh_trackings_ptr->get_data();
-          std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
-          std::lock_guard<std::mutex> lck(m_hyps_mtx);
-          update_hyps(measurements, m_hyps);
+          /* Update the hypotheses using this message //{ */
+          {
+            const uav_track::Trackings last_trackings_msg = m_sh_trackings_ptr->get_data();
+            const std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
+            {
+              std::lock_guard<std::mutex> lck(m_hyps_mtx);
+              update_hyps(measurements, m_hyps);
+            }
+          }
+          //}
+
+          /* Update the number of received rgb trackings //{ */
+          {
+            std::lock_guard<std::mutex> lck(m_stat_mtx);
+            m_rgb_trackings++;
+          }
+          //}
         }
       }
     }
@@ -121,14 +158,16 @@ namespace uav_localize
     /* publish_loop() method //{ */
     void publish_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
+      /* Find the most certain hypothesis //{ */
       Hypothesis const* most_certain_hyp = nullptr;
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         kick_out_uncertain_hyps(m_hyps);
         most_certain_hyp = find_most_certain_hyp(m_hyps);
       }
+      //}
 
-      /* Publish message of the most likely Hypothesis (if found) //{ */
+      /* Publish message of the most certain hypothesis (if found) //{ */
       if (most_certain_hyp != nullptr)
       {
         geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_hyp, ros::Time::now());
@@ -142,20 +181,28 @@ namespace uav_localize
       }
       //}
 
-      std::string most_certain_hyp_name = "none";
-      if (most_certain_hyp != nullptr)
-        most_certain_hyp_name = "#" + std::to_string(most_certain_hyp->id);
-      ROS_INFO_STREAM_THROTTLE(1.0, "[" << m_node_name << "]: #hyps: " << m_hyps.size() << " | pub. hyp.: " << most_certain_hyp_name);
+      /* Update the name of the most certin hypothesis to be displayed //{ */
+      {
+        std::lock_guard<std::mutex> lck(m_stat_mtx);
+        if (most_certain_hyp == nullptr)
+          m_most_certain_hyp_name = "none";
+        else
+          m_most_certain_hyp_name = "#" + std::to_string(most_certain_hyp->id);
+      }
+      //}
     }
     //}
 
     /* lkf_update_loop() method //{ */
     void lkf_update_loop(const ros::TimerEvent& evt)
     {
-      double dt = (evt.current_real - evt.last_real).toSec();
-      lkf_A_t A = create_A(dt);
-      lkf_R_t R = create_R(dt);
+      /* Prepare new LKF matrices A and R based on current dt //{ */
+      const double dt = (evt.current_real - evt.last_real).toSec();
+      const lkf_A_t A = create_A(dt);
+      const lkf_R_t R = create_R(dt);
+      //}
 
+      /* Iterate LKFs in all hypotheses //{ */
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         for (auto& hyp : m_hyps)
@@ -165,6 +212,31 @@ namespace uav_localize
           hyp.lkf.iterateWithoutCorrection();
         }
       }
+      //}
+    }
+    //}
+
+    /* info_loop() method //{ */
+    void info_loop([[maybe_unused]] const ros::TimerEvent& evt)
+    {
+      const float dt = (evt.current_real - evt.last_real).toSec();
+      int depth_detections_rate;
+      int rgb_trackings_rate;
+      int n_hypotheses;
+      std::string most_certain_hyp_name;
+      {
+        std::lock_guard<std::mutex> lck(m_stat_mtx);
+        depth_detections_rate = round(m_depth_detections/dt);
+        rgb_trackings_rate = round(m_rgb_trackings/dt);
+        most_certain_hyp_name = m_most_certain_hyp_name;
+        m_depth_detections = 0;
+        m_rgb_trackings = 0;
+      }
+      {
+        std::lock_guard<std::mutex> lck(m_hyps_mtx);
+        n_hypotheses = m_hyps.size();
+      }
+      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << depth_detections_rate << " Hz | trk. rate: " << rgb_trackings_rate << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
 
@@ -200,6 +272,7 @@ namespace uav_localize
     ros::Timer m_lkf_update_loop_timer;
     ros::Timer m_process_loop_timer;
     ros::Timer m_publish_loop_timer;
+    ros::Timer m_info_loop_timer;
     //}
 
   private:
@@ -607,7 +680,18 @@ namespace uav_localize
     image_geometry::PinholeCameraModel m_camera_model;
     //}
 
+    /* Statistics related variables //{ */
+    std::mutex m_stat_mtx;  // mutex for synchronization of the statistics variables
+    unsigned m_rgb_trackings;
+    unsigned m_depth_detections;
+    std::string m_most_certain_hyp_name;
+    //}
+    
   private:
+    // --------------------------------------------------------------
+    // |                hypotheses and LKF variables                |
+    // --------------------------------------------------------------
+    
     /* Hypotheses - related member variables //{ */
     std::mutex m_hyps_mtx;  // mutex for synchronization of the m_hyps variable
     std::list<Hypothesis> m_hyps;  // all currently active hypotheses
