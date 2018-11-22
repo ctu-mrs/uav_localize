@@ -220,27 +220,25 @@ namespace uav_localize
     //}
 
     /* detection_to_measurement() method //{ */
-    /* position_from_detection() method overloads //{ */
-    Eigen::Vector3d position_from_detection(const uav_detect::Detection& det)
+    /* position_from_detection() method //{ */
+    float get_depth(const uav_detect::Detection& det)
     {
-      Eigen::Vector3d ret;
-      const double u = det.x * det.roi.width + det.roi.x_offset;
-      const double v = det.y * det.roi.height + det.roi.y_offset;
-      const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
-      const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
-      ret << x, y, 1.0;
-      ret *= det.depth;
-      return ret;
+      return det.depth;
     }
-    Eigen::Vector3d position_from_detection(const uav_track::Tracking& det)
+    float get_depth(const uav_track::Tracking& det)
     {
-      Eigen::Vector3d ret;
+      return det.estimated_depth;
+    }
+
+    template <typename Detection>
+    Eigen::Vector3d position_from_detection(const Detection& det)
+    {
       const double u = det.x * det.roi.width + det.roi.x_offset;
       const double v = det.y * det.roi.height + det.roi.y_offset;
       const double x = (u - m_camera_model.cx() - m_camera_model.Tx()) / m_camera_model.fx();
       const double y = (v - m_camera_model.cy() - m_camera_model.Ty()) / m_camera_model.fy();
-      ret << x, y, 1.0;
-      ret *= det.estimated_distance;
+      Eigen::Vector3d ret(x, y, 1.0);
+      ret *= get_depth(det);
       return ret;
     }
     //}
@@ -610,7 +608,7 @@ namespace uav_localize
     //}
 
   private:
-    /* Hypothesis - related member variables //{ */
+    /* Hypotheses - related member variables //{ */
     std::mutex m_hyps_mtx;  // mutex for synchronization of the m_hyps variable
     std::list<Hypothesis> m_hyps;  // all currently active hypotheses
     int m_last_hyp_id;      // ID of the last created hypothesis - used when creating a new hypothesis to generate a new unique ID
