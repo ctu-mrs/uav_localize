@@ -220,8 +220,8 @@ namespace uav_localize
     void info_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
       const float dt = (evt.current_real - evt.last_real).toSec();
-      int depth_detections_rate;
-      int rgb_trackings_rate;
+      float depth_detections_rate;
+      float rgb_trackings_rate;
       int n_hypotheses;
       std::string most_certain_hyp_name;
       {
@@ -236,7 +236,7 @@ namespace uav_localize
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         n_hypotheses = m_hyps.size();
       }
-      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << depth_detections_rate << " Hz | trk. rate: " << rgb_trackings_rate << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
+      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate) << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
 
