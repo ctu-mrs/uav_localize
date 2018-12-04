@@ -100,7 +100,7 @@ int main(int argc, char** argv)
   ros::Rate r(30);
 
   std::list<sensor_msgs::ImageConstPtr> img_buffer;
-  ros::Time last_pose_stamp = ros::Time::now();
+  ros::Time last_valid_hypothesis_stamp = ros::Time::now();
 
   while (ros::ok())
   {
@@ -119,8 +119,9 @@ int main(int argc, char** argv)
       if (sh_hyps->new_data())
       {
         uav_localize::LocalizationHypotheses hyps_msg = sh_hyps->get_data();
-        last_pose_stamp = hyps_msg.header.stamp;
-        sensor_msgs::ImageConstPtr img_ros = find_closest(last_pose_stamp, img_buffer);
+        if (hyps_msg.main_hypothesis_id >= 0)
+          last_valid_hypothesis_stamp = hyps_msg.header.stamp;
+        sensor_msgs::ImageConstPtr img_ros = find_closest(hyps_msg.header.stamp, img_buffer);
 
         geometry_msgs::TransformStamped transform;
         try
@@ -169,7 +170,7 @@ int main(int argc, char** argv)
       } else
       {
         sensor_msgs::ImageConstPtr img_ros = img_buffer.back();
-        if (abs((img_ros->header.stamp - last_pose_stamp).toSec()) > detection_timeout)
+        if (abs((img_ros->header.stamp - last_valid_hypothesis_stamp).toSec()) > detection_timeout)
         {
           cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, "bgr8");
           cv::Mat img = img_ros2->image;

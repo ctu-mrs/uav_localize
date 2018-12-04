@@ -216,6 +216,7 @@ namespace uav_localize
           hyp.lkf.setA(A);
           hyp.lkf.setR(R);
           hyp.lkf.iterateWithoutCorrection();
+          hyp.last_source = Measurement::source_t::lkf_tracking;
         }
       }
       //}

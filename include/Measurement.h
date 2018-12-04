@@ -2,7 +2,7 @@
 #define MEASUREMENT_H
 
 #include <Eigen/Eigen>
-#include "uav_localize/LocalizedUAV.h"
+#include "uav_localize/LocalizationHypothesis.h"
 
 namespace uav_localize
 {
@@ -11,8 +11,9 @@ namespace uav_localize
   public:
     enum source_t
     {
-      depth_detection = uav_localize::LocalizedUAV::SOURCE_DEPTH_DETECTION,
-      rgb_tracking = uav_localize::LocalizedUAV::SOURCE_RGB_TRACKING
+      depth_detection = uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION,
+      rgb_tracking = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING,
+      lkf_tracking = uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION
     };
 
   public:
