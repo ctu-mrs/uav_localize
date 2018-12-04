@@ -50,7 +50,8 @@ set(Eigen_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIRS})
 set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 
 add_message_files(DIRECTORY msgs FILES
-  LocalizedUAV.msg
+  LocalizationHypothesis.msg
+  LocalizationHypotheses.msg
 )
 
 generate_messages(DEPENDENCIES

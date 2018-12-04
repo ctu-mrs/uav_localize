@@ -8,7 +8,7 @@
 #include "Hypothesis.h"
 
 #include <uav_localize/LocalizationParamsConfig.h>
-#include <uav_localize/LocalizedUAV.h>
+#include <uav_localize/LocalizationHypotheses.h>
 
 using namespace std;
 
@@ -74,7 +74,7 @@ namespace uav_localize
       m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
-      m_pub_dbg_localized_uav = nh.advertise<uav_localize::LocalizedUAV>("dbg_localized_uav", 10);
+      m_pub_dbg_localized_uav = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_localized_uav", 10);
       //}
 
       /* Initialize other variables //{ */
@@ -82,7 +82,7 @@ namespace uav_localize
       m_rgb_trackings = 0;
       m_most_certain_hyp_name = "none";
       
-      m_last_hyp_id = 0;
+      m_last_hyp_id = -1;
       //}
 
       /* Initialize timers //{ */
@@ -158,6 +158,8 @@ namespace uav_localize
     /* publish_loop() method //{ */
     void publish_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
+      ros::Time stamp = ros::Time::now();
+
       /* Find the most certain hypothesis //{ */
       Hypothesis const* most_certain_hyp = nullptr;
       {
@@ -170,14 +172,18 @@ namespace uav_localize
       /* Publish message of the most certain hypothesis (if found) //{ */
       if (most_certain_hyp != nullptr)
       {
-        geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_hyp, ros::Time::now());
+        geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_hyp, stamp);
         m_pub_localized_uav.publish(msg);
+      }
+      //}
 
-        if (m_pub_dbg_localized_uav.getNumSubscribers() > 0)
-        {
-          uav_localize::LocalizedUAV dbg_msg = to_dbg_message(*most_certain_hyp, msg);
-          m_pub_dbg_localized_uav.publish(dbg_msg);
-        }
+      /* Publish debug message of hypotheses //{ */
+      if (m_pub_dbg_localized_uav.getNumSubscribers() > 0)
+      {
+        std::lock_guard<std::mutex> lck(m_hyps_mtx);
+        int hyp_id = most_certain_hyp == nullptr ? -1 : most_certain_hyp->id;
+        uav_localize::LocalizationHypotheses dbg_msg = create_dbg_message(m_hyps, hyp_id, stamp);
+        m_pub_dbg_localized_uav.publish(dbg_msg);
       }
       //}
 
@@ -656,16 +662,28 @@ namespace uav_localize
     //}
 
     /* to_dbg_message() method //{ */
-    static uav_localize::LocalizedUAV to_dbg_message(const Hypothesis& hyp, const geometry_msgs::PoseWithCovarianceStamped& orig_msg)
+    uav_localize::LocalizationHypotheses create_dbg_message(const std::list<Hypothesis>& hyps, uint32_t main_hyp_id, const ros::Time& stamp)
     {
-      uav_localize::LocalizedUAV msg;
+      uav_localize::LocalizationHypotheses msg;
 
-      msg.header = orig_msg.header;
-      msg.position.x = orig_msg.pose.pose.position.x;
-      msg.position.y = orig_msg.pose.pose.position.y;
-      msg.position.z = orig_msg.pose.pose.position.z;
-      msg.hyp_id = hyp.id;
-      msg.last_source = hyp.last_source;
+      msg.header.stamp = stamp;
+      msg.header.frame_id = m_world_frame;
+      msg.main_hypothesis_id = main_hyp_id;
+      msg.hypotheses.reserve(hyps.size());
+
+      for (const auto& hyp : hyps)
+      {
+        uav_localize::LocalizationHypothesis hyp_msg;
+        const Eigen::Vector3d position = hyp.get_position();
+        hyp_msg.position.x = position(0);
+        hyp_msg.position.y = position(1);
+        hyp_msg.position.z = position(2);
+        hyp_msg.id = hyp.id;
+        hyp_msg.n_corrections = hyp.get_n_corrections();
+        hyp_msg.last_source = hyp.last_source;
+        
+        msg.hypotheses.push_back(hyp_msg);
+      }
 
       return msg;
     }
@@ -745,7 +763,7 @@ namespace uav_localize
       const lkf_R_t R;  // depends on the measured dt, so leave blank for now
       const lkf_Q_t Q;  // depends on the measurement, so leave blank for now
 
-      Hypothesis new_hyp(last_hyp_id, LocalizeSingle::c_n_states, LocalizeSingle::c_n_inputs, LocalizeSingle::c_n_measurements, A, B, R, Q, P);
+      Hypothesis new_hyp(++last_hyp_id, LocalizeSingle::c_n_states, LocalizeSingle::c_n_inputs, LocalizeSingle::c_n_measurements, A, B, R, Q, P);
 
       // Initialize the LKF using the new measurement
       lkf_x_t init_state;

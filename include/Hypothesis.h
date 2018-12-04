@@ -47,7 +47,7 @@ namespace uav_localize
       }
 
     protected:
-      int m_n_corrections;
+      int64_t m_n_corrections;
   };
 }
 
