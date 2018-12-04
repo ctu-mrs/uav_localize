@@ -12,8 +12,7 @@ namespace uav_localize
     enum source_t
     {
       depth_detection = uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION,
-      rgb_tracking = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING,
-      lkf_tracking = uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION
+      rgb_tracking = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING
     };
 
   public:
@@ -26,6 +25,7 @@ namespace uav_localize
     Eigen::Vector3d position;
     Eigen::Matrix3d covariance;
     source_t source;
+    ros::Time stamp;
   };
 };
 

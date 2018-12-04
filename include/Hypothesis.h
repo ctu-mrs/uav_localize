@@ -19,14 +19,13 @@ namespace uav_localize
       {};
 
       mrs_lib::Lkf lkf;
-      const int id;
-      Measurement::source_t last_source;
+      const int32_t id;
 
       void correction(const Measurement& meas)
       {
         if (meas.reliable())
           m_n_corrections++;
-        last_source = meas.source;
+        m_last_measurement = meas;
         lkf.setMeasurement(meas.position, meas.covariance);
         lkf.doCorrection();
       }
@@ -34,6 +33,11 @@ namespace uav_localize
       int get_n_corrections(void) const
       {
         return m_n_corrections;
+      }
+
+      Measurement get_last_measurement(void) const
+      {
+        return m_last_measurement;
       }
 
       Eigen::Vector3d get_position() const
@@ -46,8 +50,9 @@ namespace uav_localize
         return lkf.getCovariance().block<3, 3>(0, 0);
       }
 
-    protected:
+    private:
       int64_t m_n_corrections;
+      Measurement m_last_measurement;
   };
 }
 

@@ -11,8 +11,8 @@
   <arg     if="$(arg simulation)" name="image_topic" value="/$(arg uav_name)/realsense/camera/color/image_raw"/>
   <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/rs_d435/color/camera_info"/>
   <arg     if="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/realsense/camera/color/camera_info"/>
-  <arg unless="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_localized_uav"/>
-  <arg     if="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_localized_uav"/>
+  <arg unless="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_hypotheses"/>
+  <arg     if="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_hypotheses"/>
   <arg unless="$(arg simulation)" name="dets_topic" value="/$(arg uav_name)/uav_detection/detections"/>
   <arg     if="$(arg simulation)" name="dets_topic" value="/$(arg uav_name)/uav_detection/detections"/>
 
@@ -23,7 +23,7 @@
       <param name="detection_timeout" value="0.2" />
       <remap from="~image_rect" to="$(arg image_topic)" />
       <remap from="~camera_info" to="$(arg cinfo_topic)" />
-      <remap from="~dbg_localized_uav" to="$(arg dbgloc_topic)" />
+      <remap from="~dbg_hypotheses" to="$(arg dbgloc_topic)" />
       <remap from="~detections" to="$(arg dets_topic)" />
 
     </node>
