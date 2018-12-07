@@ -10,11 +10,9 @@ depth_detections:
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
   z_covariance_coeff: 0.1
-  # Whether to calculate the divergence in 3D space (using projected position) or in 2D space (in the image)
-  use_2D_divergence: false
-  # Maximal divergence between a measurement and a LKF for the measurement to be considered
+  # Maximal dissimilarity between a measurement and a LKF for the measurement to be considered
   # for association to a LKF
-  max_update_divergence: 5.0
+  max_update_dissimilarity: 5.0
 
 # Covariance parameters, applied to rgb tracking measurements
 rgb_trackings:
@@ -23,11 +21,9 @@ rgb_trackings:
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
   z_covariance_coeff: 1.0
-  # Whether to calculate the divergence in 3D space (using projected position) or in 2D space (in the image)
-  use_2D_divergence: true
-  # Maximal divergence between a measurement and a LKF for the measurement to be considered
+  # Maximal dissimilarity between a measurement and a LKF for the measurement to be considered
   # for association to a LKF
-  max_update_divergence: 5.0
+  max_update_dissimilarity: 5.0
 
 ## Prediction parameters
 # Process noise of the LKF position states

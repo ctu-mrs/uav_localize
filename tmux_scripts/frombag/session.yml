@@ -3,7 +3,7 @@ name: detection_and_visualization
 
 startup_window: main
 # startup_pane: 1
-pre_window: rosparam set use_sim_time 1
+pre_window: export UAV_NAME=uav81; rosparam set use_sim_time 1
 
 windows:
   - main:
@@ -22,10 +22,10 @@ windows:
       layout: even-vertical
       panes:
         - rosrun rqt_reconfigure rqt_reconfigure
-  # - static_transform_publisher:
-  #     layout: even-vertical
-  #     panes:
-  #       - rosrun tf2_ros static_transform_publisher 0 0 0 1.57 3.14 1.57 _color_optical_frame local_origin
+  - static_transform_publisher:
+      layout: even-vertical
+      panes:
+        - rosrun tf2_ros static_transform_publisher 0 0 8 0 0 0 _link local_origin
   - bash:
       layout: even-vertical
       panes:

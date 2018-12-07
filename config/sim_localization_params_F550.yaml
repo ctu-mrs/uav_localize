@@ -10,9 +10,9 @@ xy_covariance_coeff: 0.1
 z_covariance_coeff: 0.1
 
 ## Correction parameters
-# Maximal divergence between a measurement and a LKF for the measurement to be considered
+# Maximal dissimilarity between a measurement and a LKF for the measurement to be considered
 # for association to a LKF
-max_update_divergence: 5.0
+max_update_dissimilarity: 5.0
 # If a LKF exceeds this uncertainty, it is kicked out of the pool of active LKFs.
 max_lkf_uncertainty: 3.0
 

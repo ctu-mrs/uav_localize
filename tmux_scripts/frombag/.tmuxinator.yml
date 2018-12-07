@@ -3,16 +3,21 @@ name: detection_and_visualization
 
 startup_window: main
 # startup_pane: 1
-pre_window: rosparam set use_sim_time 1
+pre_window: export UAV_NAME=uav81; rosparam set use_sim_time 1
 
 windows:
   - main:
       layout: tiled
       panes:
         - roslaunch uav_detect detect_depth.launch
-        - roslaunch uav_detect localize_single.launch
+        - roslaunch uav_localize localize_single.launch
+        - roslaunch uav_track uav_track.launch
+  - vis:
+      layout: tiled
+      panes:
         - roslaunch uav_detect display_detections.launch
-        - roslaunch uav_detect backproject_location.launch
+        - roslaunch uav_localize backproject_location.launch
+        - roslaunch uav_track backproject_location.launch
   - rqt_reconfigure:
       layout: even-vertical
       panes:
@@ -20,7 +25,7 @@ windows:
   - static_transform_publisher:
       layout: even-vertical
       panes:
-        - rosrun tf2_ros static_transform_publisher 0 0 0 1.57 3.14 1.57 _color_optical_frame local_origin
+        - rosrun tf2_ros static_transform_publisher 0 0 8 0 0 0 _link local_origin
   - bash:
       layout: even-vertical
       panes:

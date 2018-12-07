@@ -83,7 +83,7 @@ namespace uav_localize
       m_depth_detections = 0;
       m_rgb_trackings = 0;
       m_most_certain_hyp_name = "none";
-      
+
       m_last_hyp_id = -1;
       //}
 
@@ -243,8 +243,8 @@ namespace uav_localize
       std::string most_certain_hyp_name;
       {
         std::lock_guard<std::mutex> lck(m_stat_mtx);
-        depth_detections_rate = round(m_depth_detections/dt);
-        rgb_trackings_rate = round(m_rgb_trackings/dt);
+        depth_detections_rate = round(m_depth_detections / dt);
+        rgb_trackings_rate = round(m_rgb_trackings / dt);
         most_certain_hyp_name = m_most_certain_hyp_name;
         m_depth_detections = 0;
         m_rgb_trackings = 0;
@@ -253,7 +253,8 @@ namespace uav_localize
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         n_hypotheses = m_hyps.size();
       }
-      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate) << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
+      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate)
+                          << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
 
@@ -409,8 +410,8 @@ namespace uav_localize
         measurement.covariance = rotate_covariance(measurement.covariance, s2w_tf.rotation());
         if (measurement.covariance.array().isNaN().any())
         {
-          ROS_ERROR_THROTTLE(1.0, "[%s]: Constructed covariance of detection [%.2f, %.2f, %.2f] contains NaNs (source: %s)!", m_node_name.c_str(), measurement.position(0),
-                             measurement.position(1), measurement.position(2), get_msg_name(msg).c_str());
+          ROS_ERROR_THROTTLE(1.0, "[%s]: Constructed covariance of detection [%.2f, %.2f, %.2f] contains NaNs (source: %s)!", m_node_name.c_str(),
+                             measurement.position(0), measurement.position(1), measurement.position(2), get_msg_name(msg).c_str());
           continue;
         }
 
@@ -428,14 +429,14 @@ namespace uav_localize
     {
       vector<int> meas_used(measurements.size(), 0);
 
-      /* Assign a measurement to each LKF based on the smallest divergence and update the LKF //{ */
+      /* Assign a measurement to each LKF based on the smallest dissimilarity and update the LKF //{ */
       for (auto& hyp : hyps)
       {
-        double divergence;
-        size_t closest_it = find_closest_measurement(hyp, measurements, divergence);
+        double dissimilarity;
+        size_t closest_it = find_closest_measurement(hyp, measurements, dissimilarity);
 
-        // Evaluate whether the divergence is small enough to justify the update
-        if (divergence < m_drmgr_ptr->config.depth_detections__max_update_divergence)
+        // Evaluate whether the dissimilarity is small enough to justify the update
+        if (dissimilarity < m_drmgr_ptr->config.depth_detections__max_update_dissimilarity)
         {
           hyp.correction(measurements.at(closest_it));
           meas_used.at(closest_it)++;
@@ -603,23 +604,24 @@ namespace uav_localize
     }
     //}
 
-    /* calc_hyp_meas_divergence() method //{ */
-    static double calc_hyp_meas_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+    /* calc_hyp_meas_dissimilarity() method //{ */
+    static double calc_hyp_meas_dissimilarity(const Eigen::Vector3d& mu0, [[maybe_unused]] const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
+                                              const Eigen::Matrix3d& sigma1)
     {
-      return kullback_leibler_divergence(mu0, sigma0, mu1, sigma1);
+      return mahalanobis_distance(mu0, mu1, sigma1);
     }
     //}
 
     /* find_closest_measurement() method //{ */
     /* returns position of the closest measurement in the pos_covs vector */
-    static size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_divergence_out)
+    static size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_dissimilarity_out)
     {
       const Eigen::Vector3d hyp_pos = hyp.get_position();
       const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance();
-      double min_divergence = std::numeric_limits<double>::max();
+      double min_dissimilarity = std::numeric_limits<double>::max();
       size_t min_div_it = 0;
 
-      // Find measurement with smallest divergence from this hypothesis and assign the measurement to it
+      // Find measurement with smallest dissimilarity from this hypothesis and assign the measurement to it
       for (size_t it = 0; it < pos_covs.size(); it++)
       {
         const auto& pos_cov = pos_covs.at(it);
@@ -627,15 +629,15 @@ namespace uav_localize
           ROS_ERROR("Covariance of LKF contains NaNs!");
         const Eigen::Vector3d& det_pos = pos_cov.position;
         const Eigen::Matrix3d& det_cov = pos_cov.covariance;
-        const double divergence = calc_hyp_meas_divergence(det_pos, det_cov, hyp_pos, hyp_cov);
+        const double dissimilarity = calc_hyp_meas_dissimilarity(det_pos, det_cov, hyp_pos, hyp_cov);
 
-        if (divergence < min_divergence)
+        if (dissimilarity < min_dissimilarity)
         {
-          min_divergence = divergence;
+          min_dissimilarity = dissimilarity;
           min_div_it = it;
         }
       }
-      min_divergence_out = min_divergence;
+      min_dissimilarity_out = min_dissimilarity;
       return min_div_it;
     }
     //}
@@ -696,7 +698,7 @@ namespace uav_localize
         hyp_msg.n_corrections = hyp.get_n_corrections();
         hyp_msg.last_correction_stamp = hyp.get_last_measurement().stamp;
         hyp_msg.last_correction_source = hyp.get_last_measurement().source;
-        
+
         msg.hypotheses.push_back(hyp_msg);
       }
 
@@ -774,16 +776,16 @@ namespace uav_localize
     unsigned m_depth_detections;
     std::string m_most_certain_hyp_name;
     //}
-    
+
   private:
     // --------------------------------------------------------------
     // |                hypotheses and LKF variables                |
     // --------------------------------------------------------------
-    
+
     /* Hypotheses - related member variables //{ */
-    std::mutex m_hyps_mtx;  // mutex for synchronization of the m_hyps variable
+    std::mutex m_hyps_mtx;         // mutex for synchronization of the m_hyps variable
     std::list<Hypothesis> m_hyps;  // all currently active hypotheses
-    int32_t m_last_hyp_id;      // ID of the last created hypothesis - used when creating a new hypothesis to generate a new unique ID
+    int32_t m_last_hyp_id;         // ID of the last created hypothesis - used when creating a new hypothesis to generate a new unique ID
     //}
 
     /* Definitions of the LKF (consts, typedefs, etc.) //{ */
@@ -856,7 +858,7 @@ namespace uav_localize
     // --------------------------------------------------------------
 
     /* kullback_leibler_divergence() method //{ */
-    // This method calculates the kullback-leibler divergence of two three-dimensional normal distributions.
+    // This method calculates the Kullback-Leibler divergence of two three-dimensional normal distributions.
     // It is used for deciding which measurement to use for which hypothesis.
     static double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
                                               const Eigen::Matrix3d& sigma1)
@@ -866,6 +868,17 @@ namespace uav_localize
                          * ((sigma1.inverse() * sigma0).trace() + (mu1 - mu0).transpose() * (sigma1.inverse()) * (mu1 - mu0) - k
                             + log((sigma1.determinant()) / sigma0.determinant()));
       return div;
+    }
+    //}
+
+    /* mahalanobis_distance() method //{ */
+    // This method calculates the Mahalanobis distance of an observation to a normal distributions.
+    // It is used for deciding which measurement to use for which hypothesis.
+    static double mahalanobis_distance(const Eigen::Vector3d& x, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+    {
+      const auto diff = x - mu1;
+      const double dist = sqrt(diff.transpose() * sigma1.inverse() * diff);
+      return dist;
     }
     //}
 
