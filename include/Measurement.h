@@ -21,6 +21,24 @@ namespace uav_localize
       return source == source_t::depth_detection;
     }
 
+    std::string source_name() const
+    {
+      std::string ret;
+      switch (source)
+      {
+        case depth_detection:
+          ret = "uav_detect::Detections";
+          break;
+        case rgb_tracking:
+          ret = "uav_track::Trackings";
+          break;
+        default:
+          ret = "unknown";
+          break;
+      }
+      return ret;
+    }
+
   public:
     Eigen::Vector3d position;
     Eigen::Matrix3d covariance;

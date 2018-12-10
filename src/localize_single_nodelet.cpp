@@ -35,16 +35,17 @@ namespace uav_localize
       /* Load parameters from ROS //{*/
       mrs_lib::ParamLoader pl(nh, m_node_name);
       // LOAD STATIC PARAMETERS
-      ROS_INFO("Loading static parameters:");
+      NODELET_INFO("[LocalizeSingle]: Loading static parameters:");
       pl.load_param("world_frame", m_world_frame, std::string("local_origin"));
-      pl.load_param("lkf_dt", m_lkf_dt);
+      const int update_loop_rate = pl.load_param2<int>("update_loop_rate");
       const int process_loop_rate = pl.load_param2<int>("process_loop_rate");
       const int publish_loop_rate = pl.load_param2<int>("publish_loop_rate");
+      const int info_loop_rate = pl.load_param2<int>("info_loop_rate");
       pl.load_param("min_detection_height", m_min_detection_height);
 
       if (!pl.loaded_successfully())
       {
-        ROS_ERROR("Some compulsory parameters were not loaded successfully, ending the node");
+        NODELET_ERROR("[LocalizeSingle]: Some compulsory parameters were not loaded successfully, ending the node");
         ros::shutdown();
       }
 
@@ -60,7 +61,7 @@ namespace uav_localize
       /* drmgr.map_param("min_corrs_to_consider", m_min_corrs_to_consider); */
       if (!m_drmgr_ptr->loaded_successfully())
       {
-        ROS_ERROR("Some dynamic parameter default values were not loaded successfully, ending the node");
+        NODELET_ERROR("[LocalizeSingle]: Some dynamic parameter default values were not loaded successfully, ending the node");
         ros::shutdown();
       }
       //}
@@ -80,6 +81,7 @@ namespace uav_localize
       //}
 
       /* Initialize other variables //{ */
+      m_lkf_dt = 1.0 / double(update_loop_rate);
       m_depth_detections = 0;
       m_rgb_trackings = 0;
       m_most_certain_hyp_name = "none";
@@ -88,13 +90,13 @@ namespace uav_localize
       //}
 
       /* Initialize timers //{ */
-      m_lkf_update_loop_timer = nh.createTimer(ros::Duration(m_lkf_dt), &LocalizeSingle::lkf_update_loop, this);
+      m_lkf_update_loop_timer = nh.createTimer(ros::Rate(update_loop_rate), &LocalizeSingle::lkf_update_loop, this);
       m_process_loop_timer = nh.createTimer(ros::Rate(process_loop_rate), &LocalizeSingle::process_loop, this);
       m_publish_loop_timer = nh.createTimer(ros::Rate(publish_loop_rate), &LocalizeSingle::publish_loop, this);
-      m_info_loop_timer = nh.createTimer(ros::Rate(1.0), &LocalizeSingle::info_loop, this);
+      m_info_loop_timer = nh.createTimer(ros::Rate(info_loop_rate), &LocalizeSingle::info_loop, this);
       //}
 
-      cout << "----------------------------------------------------------" << std::endl;
+      std::cout << "----------------------------------------------------------" << std::endl;
     }
     //}
 
@@ -118,6 +120,8 @@ namespace uav_localize
           {
             const uav_detect::Detections last_detections_msg = m_sh_detections_ptr->get_data();
             const std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
+            /* if (measurements.empty()) */
+            /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_detections_msg).c_str()); */
             {
               std::lock_guard<std::mutex> lck(m_hyps_mtx);
               update_hyps(measurements, m_hyps);
@@ -139,6 +143,8 @@ namespace uav_localize
           {
             const uav_track::Trackings last_trackings_msg = m_sh_trackings_ptr->get_data();
             const std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
+            /* if (measurements.empty()) */
+            /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_trackings_msg).c_str()); */
             {
               std::lock_guard<std::mutex> lck(m_hyps_mtx);
               update_hyps(measurements, m_hyps);
@@ -253,7 +259,7 @@ namespace uav_localize
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         n_hypotheses = m_hyps.size();
       }
-      ROS_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate)
+      NODELET_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate)
                           << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
@@ -402,7 +408,7 @@ namespace uav_localize
         measurement.position = s2w_tf * measurement.position;
         if (!position_valid(measurement.position))
         {
-          ROS_WARN_THROTTLE(1.0, "[%s]: Global position of detection [%.2f, %.2f, %.2f] is invalid (source: %s)!", m_node_name.c_str(), measurement.position(0),
+          NODELET_WARN_THROTTLE(1.0, "[%s]: Global position of detection [%.2f, %.2f, %.2f] is invalid (source: %s)!", m_node_name.c_str(), measurement.position(0),
                             measurement.position(1), measurement.position(2), get_msg_name(msg).c_str());
           continue;
         }
@@ -410,7 +416,7 @@ namespace uav_localize
         measurement.covariance = rotate_covariance(measurement.covariance, s2w_tf.rotation());
         if (measurement.covariance.array().isNaN().any())
         {
-          ROS_ERROR_THROTTLE(1.0, "[%s]: Constructed covariance of detection [%.2f, %.2f, %.2f] contains NaNs (source: %s)!", m_node_name.c_str(),
+          NODELET_ERROR_THROTTLE(1.0, "[%s]: Constructed covariance of detection [%.2f, %.2f, %.2f] contains NaNs (source: %s)!", m_node_name.c_str(),
                              measurement.position(0), measurement.position(1), measurement.position(2), get_msg_name(msg).c_str());
           continue;
         }
@@ -446,15 +452,19 @@ namespace uav_localize
 
       /* Instantiate new hypotheses for unused measurements (these are not considered as candidates for the most certain hypothesis) //{ */
       {
+        int new_hyps = 0;
         for (size_t it = 0; it < measurements.size(); it++)
         {
           if (meas_used.at(it) < 1)
           {
             Hypothesis new_hyp = create_new_hyp(measurements.at(it), m_last_hyp_id, m_drmgr_ptr->config.init_vel_cov);
             m_hyps.push_back(new_hyp);
-            /* new_hyps++; */
+            new_hyps++;
           }
         }
+        if (!measurements.empty())
+          NODELET_DEBUG("[LocalizeSingle]: Created %d new hypotheses for total of %lu (got %lu new measurements from %s)", new_hyps, m_hyps.size(),
+                        measurements.size(), measurements.at(0).source_name().c_str());
       }
       //}
     }
@@ -525,7 +535,7 @@ namespace uav_localize
       }
       catch (tf2::TransformException& ex)
       {
-        ROS_WARN_THROTTLE(1.0, "[%s]: Error during transform from \"%s\" frame to \"%s\" frame.\n\tMSG: %s", m_node_name.c_str(), frame_id.c_str(),
+        NODELET_WARN_THROTTLE(1.0, "[%s]: Error during transform from \"%s\" frame to \"%s\" frame.\n\tMSG: %s", m_node_name.c_str(), frame_id.c_str(),
                           m_world_frame.c_str(), ex.what());
         return false;
       }
@@ -614,7 +624,7 @@ namespace uav_localize
 
     /* find_closest_measurement() method //{ */
     /* returns position of the closest measurement in the pos_covs vector */
-    static size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_dissimilarity_out)
+    size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_dissimilarity_out)
     {
       const Eigen::Vector3d hyp_pos = hyp.get_position();
       const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance();
@@ -626,7 +636,7 @@ namespace uav_localize
       {
         const auto& pos_cov = pos_covs.at(it);
         if (pos_cov.covariance.array().isNaN().any())
-          ROS_ERROR("Covariance of LKF contains NaNs!");
+          NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         const Eigen::Vector3d& det_pos = pos_cov.position;
         const Eigen::Matrix3d& det_cov = pos_cov.covariance;
         const double dissimilarity = calc_hyp_meas_dissimilarity(det_pos, det_cov, hyp_pos, hyp_cov);

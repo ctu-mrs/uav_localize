@@ -1,3 +1,14 @@
 
+# Rate of the loop for processing new measurements.
+# If there are no measurements, the loop does nothing,
+# so this can safely be set to a high number.
+# Should be much higher than rate of measurements in order
+# to not miss any measurement.
 process_loop_rate: 200 # Hz
+# Rate of the loop for publishing latest localization
+# estimate. Set as high as desired.
 publish_loop_rate: 25 # Hz
+# Rate of the loop for updating the Kalman filters.
+update_loop_rate:  50 # Hz
+# Rate of the loop for printing out info about the node.
+info_loop_rate:    1 # Hz

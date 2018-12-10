@@ -3,7 +3,7 @@ name: detection_and_visualization
 
 startup_window: main
 # startup_pane: 1
-pre_window: export UAV_NAME=uav81; rosparam set use_sim_time 1
+pre_window: export UAV_NAME=uav81; rosparam set use_sim_time 1; export ROSCONSOLE_CONFIG_FILE="$(pwd)/../../config/rosconsole.config"
 
 windows:
   - main:
