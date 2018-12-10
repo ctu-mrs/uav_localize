@@ -71,9 +71,9 @@ namespace uav_localize
       m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer);
       // Subscribers
       mrs_lib::SubscribeMgr smgr(nh, m_node_name);
-      m_sh_detections_ptr = smgr.create_handler_threadsafe<uav_detect::Detections>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-      m_sh_trackings_ptr = smgr.create_handler_threadsafe<uav_track::Trackings>("trackings", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-      m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      m_sh_detections_ptr = smgr.create_handler_threadsafe<uav_detect::DetectionsConstPtr>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      m_sh_trackings_ptr = smgr.create_handler_threadsafe<uav_track::TrackingsConstPtr>("trackings", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfoConstPtr>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
       m_pub_dgb_hypotheses = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 10);
@@ -118,7 +118,7 @@ namespace uav_localize
         {
           /* Update the hypotheses using this message //{ */
           {
-            const uav_detect::Detections last_detections_msg = m_sh_detections_ptr->get_data();
+            const uav_detect::DetectionsConstPtr last_detections_msg = m_sh_detections_ptr->get_data();
             const std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
             /* if (measurements.empty()) */
             /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_detections_msg).c_str()); */
@@ -141,7 +141,7 @@ namespace uav_localize
         {
           /* Update the hypotheses using this message //{ */
           {
-            const uav_track::Trackings last_trackings_msg = m_sh_trackings_ptr->get_data();
+            const uav_track::TrackingsConstPtr last_trackings_msg = m_sh_trackings_ptr->get_data();
             const std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
             /* if (measurements.empty()) */
             /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_trackings_msg).c_str()); */
@@ -180,7 +180,7 @@ namespace uav_localize
       /* Publish message of the most certain hypothesis (if found) //{ */
       if (most_certain_hyp != nullptr)
       {
-        geometry_msgs::PoseWithCovarianceStamped msg = create_message(*most_certain_hyp, stamp);
+        geometry_msgs::PoseWithCovarianceStampedConstPtr msg = create_message(*most_certain_hyp, stamp);
         m_pub_localized_uav.publish(msg);
       }
       //}
@@ -190,7 +190,7 @@ namespace uav_localize
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         int hyp_id = most_certain_hyp == nullptr ? -1 : most_certain_hyp->id;
-        uav_localize::LocalizationHypotheses dbg_msg = create_dbg_message(m_hyps, hyp_id, stamp);
+        uav_localize::LocalizationHypothesesConstPtr dbg_msg = create_dbg_message(m_hyps, hyp_id, stamp);
         m_pub_dgb_hypotheses.publish(dbg_msg);
       }
       //}
@@ -200,10 +200,11 @@ namespace uav_localize
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         int hyp_id = most_certain_hyp == nullptr ? -1 : most_certain_hyp->id;
-        sensor_msgs::PointCloud pcl_msg = create_pcl_message(m_hyps, hyp_id, stamp);
+        sensor_msgs::PointCloudConstPtr pcl_msg = create_pcl_message(m_hyps, hyp_id, stamp);
         m_pub_dgb_pcl.publish(pcl_msg);
       }
       //}
+      
       /* Update the name of the most certin hypothesis to be displayed //{ */
       {
         std::lock_guard<std::mutex> lck(m_stat_mtx);
@@ -288,9 +289,9 @@ namespace uav_localize
     std::unique_ptr<drmgr_t> m_drmgr_ptr;
     tf2_ros::Buffer m_tf_buffer;
     std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_detect::Detections> m_sh_detections_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_track::Trackings> m_sh_trackings_ptr;
-    mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfo> m_sh_cinfo_ptr;
+    mrs_lib::SubscribeHandlerPtr<uav_detect::DetectionsConstPtr> m_sh_detections_ptr;
+    mrs_lib::SubscribeHandlerPtr<uav_track::TrackingsConstPtr> m_sh_trackings_ptr;
+    mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfoConstPtr> m_sh_cinfo_ptr;
     ros::Publisher m_pub_localized_uav;
     ros::Publisher m_pub_dgb_hypotheses;
     ros::Publisher m_pub_dgb_pcl;
@@ -653,21 +654,21 @@ namespace uav_localize
     //}
 
     /* create_message() method //{ */
-    geometry_msgs::PoseWithCovarianceStamped create_message(const Hypothesis& hyp, ros::Time stamp) const
+    geometry_msgs::PoseWithCovarianceStampedConstPtr create_message(const Hypothesis& hyp, ros::Time stamp) const
     {
-      geometry_msgs::PoseWithCovarianceStamped msg;
+      geometry_msgs::PoseWithCovarianceStampedPtr msg;
 
-      msg.header.frame_id = m_world_frame;
-      msg.header.stamp = stamp;
+      msg->header.frame_id = m_world_frame;
+      msg->header.stamp = stamp;
 
       {
         const Eigen::Vector3d position = hyp.get_position();
-        msg.pose.pose.position.x = position(0);
-        msg.pose.pose.position.y = position(1);
-        msg.pose.pose.position.z = position(2);
+        msg->pose.pose.position.x = position(0);
+        msg->pose.pose.position.y = position(1);
+        msg->pose.pose.position.z = position(2);
       }
 
-      msg.pose.pose.orientation.w = 1.0;
+      msg->pose.pose.orientation.w = 1.0;
 
       {
         const Eigen::Matrix3d covariance = hyp.get_position_covariance();
@@ -676,9 +677,9 @@ namespace uav_localize
           for (int c = 0; c < 6; c++)
           {
             if (r < 3 && c < 3)
-              msg.pose.covariance[r * 6 + c] = covariance(r, c);
+              msg->pose.covariance[r * 6 + c] = covariance(r, c);
             else if (r == c)
-              msg.pose.covariance[r * 6 + c] = 666;
+              msg->pose.covariance[r * 6 + c] = 666;
           }
         }
       }
@@ -688,14 +689,14 @@ namespace uav_localize
     //}
 
     /* to_dbg_message() method //{ */
-    uav_localize::LocalizationHypotheses create_dbg_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
+    uav_localize::LocalizationHypothesesConstPtr create_dbg_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
-      uav_localize::LocalizationHypotheses msg;
+      uav_localize::LocalizationHypothesesPtr msg;
 
-      msg.header.stamp = stamp;
-      msg.header.frame_id = m_world_frame;
-      msg.main_hypothesis_id = main_hyp_id;
-      msg.hypotheses.reserve(hyps.size());
+      msg->header.stamp = stamp;
+      msg->header.frame_id = m_world_frame;
+      msg->main_hypothesis_id = main_hyp_id;
+      msg->hypotheses.reserve(hyps.size());
 
       for (const auto& hyp : hyps)
       {
@@ -709,7 +710,7 @@ namespace uav_localize
         hyp_msg.last_correction_stamp = hyp.get_last_measurement().stamp;
         hyp_msg.last_correction_source = hyp.get_last_measurement().source;
 
-        msg.hypotheses.push_back(hyp_msg);
+        msg->hypotheses.push_back(hyp_msg);
       }
 
       return msg;
@@ -717,13 +718,13 @@ namespace uav_localize
     //}
 
     /* to_pcl_message() method //{ */
-    sensor_msgs::PointCloud create_pcl_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
+    sensor_msgs::PointCloudConstPtr create_pcl_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
-      sensor_msgs::PointCloud msg;
+      sensor_msgs::PointCloudPtr msg;
 
-      msg.header.stamp = stamp;
-      msg.header.frame_id = m_world_frame;
-      msg.points.reserve(hyps.size());
+      msg->header.stamp = stamp;
+      msg->header.frame_id = m_world_frame;
+      msg->points.reserve(hyps.size());
 
       sensor_msgs::ChannelFloat32 ch_main_hyp;
       ch_main_hyp.name = "main hypothesis";
@@ -752,7 +753,7 @@ namespace uav_localize
         pt.x = position(0);
         pt.y = position(1);
         pt.z = position(2);
-        msg.points.push_back(pt);
+        msg->points.push_back(pt);
 
         ch_main_hyp.values.push_back(hyp.id == main_hyp_id);
         ch_id.values.push_back(hyp.id);
@@ -762,11 +763,11 @@ namespace uav_localize
         ch_last_correction_source.values.push_back(hyp.get_last_measurement().source);
       }
 
-      msg.channels.push_back(ch_main_hyp);
-      msg.channels.push_back(ch_id);
-      msg.channels.push_back(ch_n_corrections);
-      msg.channels.push_back(ch_last_correction_delay);
-      msg.channels.push_back(ch_last_correction_source);
+      msg->channels.push_back(ch_main_hyp);
+      msg->channels.push_back(ch_id);
+      msg->channels.push_back(ch_n_corrections);
+      msg->channels.push_back(ch_last_correction_delay);
+      msg->channels.push_back(ch_last_correction_source);
       return msg;
     }
     //}
