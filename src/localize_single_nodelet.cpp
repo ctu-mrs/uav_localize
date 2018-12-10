@@ -656,7 +656,7 @@ namespace uav_localize
     /* create_message() method //{ */
     geometry_msgs::PoseWithCovarianceStampedConstPtr create_message(const Hypothesis& hyp, ros::Time stamp) const
     {
-      geometry_msgs::PoseWithCovarianceStampedPtr msg;
+      geometry_msgs::PoseWithCovarianceStampedPtr msg = boost::make_shared<geometry_msgs::PoseWithCovarianceStamped>();
 
       msg->header.frame_id = m_world_frame;
       msg->header.stamp = stamp;
@@ -691,7 +691,7 @@ namespace uav_localize
     /* to_dbg_message() method //{ */
     uav_localize::LocalizationHypothesesConstPtr create_dbg_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
-      uav_localize::LocalizationHypothesesPtr msg;
+      uav_localize::LocalizationHypothesesPtr msg = boost::make_shared<uav_localize::LocalizationHypotheses>();
 
       msg->header.stamp = stamp;
       msg->header.frame_id = m_world_frame;
@@ -720,7 +720,7 @@ namespace uav_localize
     /* to_pcl_message() method //{ */
     sensor_msgs::PointCloudConstPtr create_pcl_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
-      sensor_msgs::PointCloudPtr msg;
+      sensor_msgs::PointCloudPtr msg = boost::make_shared<sensor_msgs::PointCloud>();
 
       msg->header.stamp = stamp;
       msg->header.frame_id = m_world_frame;
