@@ -307,14 +307,14 @@ namespace uav_localize
     // --------------------------------------------------------------
 
     /* get_detections() method overloads //{ */
-    const std::vector<uav_detect::Detection>& get_detections(const uav_detect::Detections& msg)
+    const std::vector<uav_detect::Detection>& get_detections(const uav_detect::DetectionsConstPtr& msg)
     {
-      return msg.detections;
+      return msg->detections;
     }
 
-    const std::vector<uav_track::Tracking>& get_detections(const uav_track::Trackings& msg)
+    const std::vector<uav_track::Tracking>& get_detections(const uav_track::TrackingsConstPtr& msg)
     {
-      return msg.trackings;
+      return msg->trackings;
     }
     //}
 
@@ -388,8 +388,8 @@ namespace uav_localize
     std::vector<Measurement> measurements_from_message(const MessageType& msg)
     {
       std::vector<Measurement> ret;
-      const ros::Time msg_stamp = msg.header.stamp;
-      const std::string sensor_frame = msg.header.frame_id;
+      const ros::Time msg_stamp = msg->header.stamp;
+      const std::string sensor_frame = msg->header.frame_id;
       // Construct a new world to camera transform
       Eigen::Affine3d s2w_tf;
       bool tf_ok = get_transform_to_world(sensor_frame, msg_stamp, s2w_tf);
@@ -404,7 +404,7 @@ namespace uav_localize
       for (const auto& det : dets)
       {
         Measurement measurement = detection_to_measurement(det);
-        measurement.stamp = msg.header.stamp;
+        measurement.stamp = msg->header.stamp;
 
         measurement.position = s2w_tf * measurement.position;
         if (!position_valid(measurement.position))
@@ -589,11 +589,11 @@ namespace uav_localize
     //}
 
     /* get_msg_name() method overloads //{ */
-    inline static std::string get_msg_name([[maybe_unused]] const uav_detect::Detections& msg)
+    inline static std::string get_msg_name([[maybe_unused]] const uav_detect::DetectionsConstPtr& msg)
     {
       return "uav_detect::Detections";
     }
-    inline static std::string get_msg_name([[maybe_unused]] const uav_track::Trackings& msg)
+    inline static std::string get_msg_name([[maybe_unused]] const uav_track::TrackingsConstPtr& msg)
     {
       return "uav_track::Trackings";
     }
