@@ -17,7 +17,7 @@ windows:
       panes:
         - roslaunch uav_detect display_detections.launch
         - roslaunch uav_localize backproject_location.launch
-        - roslaunch uav_track backproject_location.launch
+        - roslaunch uav_track display_tracking.launch
   - rqt_reconfigure:
       layout: even-vertical
       panes:
@@ -25,7 +25,7 @@ windows:
   - static_transform_publisher:
       layout: even-vertical
       panes:
-        - rosrun tf2_ros static_transform_publisher 0 0 8 0 0 0 _link local_origin
+        - rosrun tf2_ros static_transform_publisher 0 0 8 0 0 0 local_origin _link
   - bash:
       layout: even-vertical
       panes:

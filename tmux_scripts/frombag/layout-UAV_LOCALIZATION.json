@@ -4,55 +4,35 @@
 		"floating": "auto_off",
 		"fullscreen_mode": 0,
 		"layout": "splith",
-		"percent": 0.25,
+		"percent": 0.5,
 		"type": "con",
 		"nodes": [
 			{
 				"border": "normal",
 				"floating": "auto_off",
 				"layout": "splith",
-				"percent": null,
+				"percent": 1,
 				"type": "con",
 				"nodes": [
 					{
 						"border": "normal",
 						"floating": "auto_off",
-						"layout": "splitv",
-						"percent": 0.5,
+						"layout": "splith",
+						"percent": 1,
 						"type": "con",
 						"nodes": [
 							{
 								"border": "normal",
 								"floating": "auto_off",
 								"layout": "splitv",
-								"percent": null,
+								"percent": 0.5,
 								"type": "con",
 								"nodes": [
 									{
 										"border": "normal",
-										"current_border_width": 2,
 										"floating": "auto_off",
-										"geometry": {
-											"height": 1038,
-											"width": 1920,
-											"x": 0,
-											"y": 0
-										},
-										"name": "depth_detections",
-										"percent": 0.5,
-										"swallows": [
-											{
-												"title": "^depth_detections$",
-												"transient_for": "^$"
-											}
-										],
-										"type": "con"
-									},
-									{
-										"border": "normal",
-										"floating": "auto_off",
-										"layout": "stacked",
-										"percent": 0.5,
+										"layout": "splitv",
+										"percent": 1,
 										"type": "con",
 										"nodes": [
 											{
@@ -60,93 +40,103 @@
 												"current_border_width": 2,
 												"floating": "auto_off",
 												"geometry": {
-													"height": 1012,
-													"width": 938,
+													"height": 1038,
+													"width": 1920,
 													"x": 0,
 													"y": 0
 												},
-												"name": "depth_image",
+												"name": "depth_detections",
 												"percent": 0.5,
 												"swallows": [
 													{
-														"title": "^depth_image$",
+                            "title": "^depth_detections$",
 														"transient_for": "^$"
 													}
 												],
 												"type": "con"
 											},
 											{
-												"border": "pixel",
-												"current_border_width": 3,
+												"border": "normal",
 												"floating": "auto_off",
-												"geometry": {
-													"height": 1030,
-													"width": 936,
-													"x": 966,
-													"y": 32
-												},
-												"name": "rqt_reconfigure__Param - rqt",
+												"layout": "stacked",
 												"percent": 0.5,
-												"swallows": [
+												"type": "con",
+												"nodes": [
 													{
-														"title": "^rqt_reconfigure__Param - rqt$",
-														"transient_for": "^$"
+														"border": "pixel",
+														"current_border_width": 3,
+														"floating": "auto_off",
+														"geometry": {
+															"height": 1030,
+															"width": 936,
+															"x": 966,
+															"y": 32
+														},
+														"name": "rqt_reconfigure__Param - rqt",
+														"percent": 1,
+														"swallows": [
+															{
+                                "title": "^rqt_reconfigure__Param - rqt$",
+																"instance": "",
+																"transient_for": "^$"
+															}
+														],
+														"type": "con"
 													}
-												],
-												"type": "con"
+												]
 											}
 										]
 									}
 								]
-							}
-						]
-					},
-					{
-						"border": "normal",
-						"floating": "auto_off",
-						"layout": "splitv",
-						"percent": 0.5,
-						"type": "con",
-						"nodes": [
-							{
-								"border": "normal",
-								"current_border_width": 2,
-								"floating": "auto_off",
-								"geometry": {
-									"height": 990,
-									"width": 944,
-									"x": 0,
-									"y": 0
-								},
-								"name": "backprojected_detection",
-								"percent": 0.5,
-								"swallows": [
-									{
-										"title": "^backprojected_detection$",
-										"transient_for": "^$"
-									}
-								],
-								"type": "con"
 							},
 							{
 								"border": "normal",
-								"current_border_width": 2,
 								"floating": "auto_off",
-								"geometry": {
-									"height": 1012,
-									"width": 618,
-									"x": 0,
-									"y": 0
-								},
-								"name": "RGB_image",
+								"layout": "splitv",
 								"percent": 0.5,
-								"swallows": [
+								"type": "con",
+								"nodes": [
 									{
-										"title": "^RGB_image$",
-										"transient_for": "^$"
+										"border": "normal",
+										"current_border_width": 2,
+										"floating": "auto_off",
+										"geometry": {
+											"height": 990,
+											"width": 944,
+											"x": 0,
+											"y": 0
+										},
+										"name": "backprojected_localization",
+										"percent": 0.5,
+										"swallows": [
+											{
+                        "title": "^backprojected_localization$",
+												"transient_for": "^$"
+											}
+										],
+										"type": "con"
+									},
+									{
+										"border": "normal",
+										"current_border_width": 3,
+										"floating": "user_off",
+										"geometry": {
+											"height": 1030,
+											"width": 936,
+											"x": 966,
+											"y": 32
+										},
+										"name": "trackings",
+										"percent": 0.5,
+										"swallows": [
+											{
+                        "title": "^trackings$",
+												"transient_for": "^$"
+											}
+										],
+										"type": "con"
 									}
-								],
-								"type": "con"
+								]
 							}
 						]
 					}
