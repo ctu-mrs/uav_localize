@@ -89,9 +89,15 @@ int main(int argc, char** argv)
 
   ros::NodeHandle nh = ros::NodeHandle("~");
 
-  std::cout << "Waiting for valid time..." << std::endl;
-  while (!ros::Time::isValid())
-    ros::spinOnce();
+  {
+    std::cout << "Waiting for valid time..." << std::endl;
+    ros::Rate r(10);
+    while (!ros::Time::isValid())
+    {
+      r.sleep();
+      ros::spinOnce();
+    }
+  }
 
   mrs_lib::SubscribeHandlerPtr<uav_localize::LocalizationHypotheses> sh_hyps;
   mrs_lib::SubscribeHandlerPtr<sensor_msgs::ImageConstPtr> sh_img;
@@ -101,10 +107,11 @@ int main(int argc, char** argv)
   nh.param("detection_timeout", detection_timeout, 0.5);
   ROS_INFO("detection_timeout: %f", detection_timeout);
 
-  mrs_lib::SubscribeMgr smgr(nh);
-  sh_hyps = smgr.create_handler_threadsafe<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_cinfo = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+  mrs_lib::SubscribeMgr smgr(nh, "backprojection_node");
+  const bool subs_time_consistent = true;
+  sh_hyps = smgr.create_handler_threadsafe<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+  sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr, subs_time_consistent>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+  sh_cinfo = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
 
   tf2_ros::Buffer tf_buffer;
   tf2_ros::TransformListener tf_listener(tf_buffer);

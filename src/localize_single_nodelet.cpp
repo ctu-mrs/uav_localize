@@ -71,9 +71,10 @@ namespace uav_localize
       m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer);
       // Subscribers
       mrs_lib::SubscribeMgr smgr(nh, m_node_name);
-      m_sh_detections_ptr = smgr.create_handler_threadsafe<uav_detect::DetectionsConstPtr>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-      m_sh_trackings_ptr = smgr.create_handler_threadsafe<uav_track::TrackingsConstPtr>("trackings", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-      m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfoConstPtr>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      const bool subs_time_consistent = true;
+      m_sh_detections_ptr = smgr.create_handler_threadsafe<uav_detect::DetectionsConstPtr, subs_time_consistent>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      m_sh_trackings_ptr = smgr.create_handler_threadsafe<uav_track::TrackingsConstPtr, subs_time_consistent>("trackings", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
+      m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfoConstPtr, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
       m_pub_dgb_hypotheses = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 10);
