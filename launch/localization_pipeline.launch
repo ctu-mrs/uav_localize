@@ -17,7 +17,7 @@
 
   <group ns="$(arg uav_name)">
 
-    <node pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="screen" >
+    <node pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="screen" launch-prefix="$(arg launch_prefix)">
       <param name="num_worker_threads" value="16" />
     </node>
 
@@ -36,7 +36,6 @@
   <include file="$(find uav_detect)/launch/detect_depth.launch">
     <arg name="standalone"  value="false" />
     <arg name="manager"     value="$(arg manager)" />
-    <arg name="debug"       value="$(arg debug)" />
     <arg name="simulation"  value="$(arg simulation)" />
     <arg name="ignore_mask" value="$(arg ignore_mask)" />
   </include>
@@ -45,7 +44,6 @@
   <include file="$(find uav_track)/launch/uav_track.launch">
     <arg name="standalone" value="false" />
     <arg name="manager"    value="$(arg manager)" />
-    <arg name="debug"      value="$(arg debug)" />
     <arg name="simulation" value="$(arg simulation)" />
   </include>
 
@@ -53,7 +51,6 @@
   <include file="$(find uav_localize)/launch/localize_single.launch">
     <arg name="standalone" value="false" />
     <arg name="manager"    value="$(arg manager)" />
-    <arg name="debug"      value="$(arg debug)" />
     <arg name="simulation" value="$(arg simulation)" />
   </include>
   

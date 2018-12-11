@@ -42,7 +42,6 @@ namespace uav_localize
       const int publish_loop_rate = pl.load_param2<int>("publish_loop_rate");
       const int info_loop_rate = pl.load_param2<int>("info_loop_rate");
       pl.load_param("min_detection_height", m_min_detection_height);
-
       if (!pl.loaded_successfully())
       {
         NODELET_ERROR("[LocalizeSingle]: Some compulsory parameters were not loaded successfully, ending the node");
@@ -59,11 +58,25 @@ namespace uav_localize
       /* drmgr.map_param("lkf_process_noise_pos", m_lkf_process_noise_pos); */
       /* drmgr.map_param("init_vel_cov", m_init_vel_cov); */
       /* drmgr.map_param("min_corrs_to_consider", m_min_corrs_to_consider); */
+      /* DAMN THE UNFINISHED ROS DYNAMIC RECONFIGURE!!! //{ */
+      uav_localize::LocalizationParamsConfig cfg = m_drmgr_ptr->config;
+      m_drmgr_ptr->load_param("depth_detections/xy_covariance_coeff", cfg.depth_detections__xy_covariance_coeff);
+      m_drmgr_ptr->load_param("depth_detections/z_covariance_coeff", cfg.depth_detections__z_covariance_coeff);
+      m_drmgr_ptr->load_param("depth_detections/max_update_dissimilarity", cfg.depth_detections__max_update_dissimilarity);
+      m_drmgr_ptr->load_param("rgb_trackings/xy_covariance_coeff", cfg.rgb_trackings__xy_covariance_coeff);
+      m_drmgr_ptr->load_param("rgb_trackings/z_covariance_coeff", cfg.rgb_trackings__z_covariance_coeff);
+      m_drmgr_ptr->load_param("rgb_trackings/max_update_dissimilarity", cfg.rgb_trackings__max_update_dissimilarity);
+      m_drmgr_ptr->update_config(cfg);
+      //}
       if (!m_drmgr_ptr->loaded_successfully())
       {
-        NODELET_ERROR("[LocalizeSingle]: Some dynamic parameter default values were not loaded successfully, ending the node");
+        NODELET_ERROR("[LocalizeSingle]: Some default values of dynamically reconfigurable parameters were not loaded successfully, ending the node:");
+        std::vector<std::string> to_init = m_drmgr_ptr->to_init();
+        for (const auto& name : to_init)
+          NODELET_ERROR("%s", name.c_str());
         ros::shutdown();
       }
+      
       //}
 
       /* Create publishers and subscribers //{ */
@@ -441,13 +454,14 @@ namespace uav_localize
       for (auto& hyp : hyps)
       {
         double dissimilarity;
-        size_t closest_it = find_closest_measurement(hyp, measurements, dissimilarity);
+        int closest_it = find_closest_measurement(hyp, measurements, dissimilarity);
 
         // Evaluate whether the dissimilarity is small enough to justify the update
-        if (dissimilarity < m_drmgr_ptr->config.depth_detections__max_update_dissimilarity)
+        if (closest_it >= 0)
         {
           hyp.correction(measurements.at(closest_it));
           meas_used.at(closest_it)++;
+          NODELET_DEBUG("[LocalizeSingle]: Updated hypothesis ID%d using measurement from %s (dis.: %f)", hyp.id, measurements.at(closest_it).source_name().c_str(), dissimilarity);
         }
       }
       //}
@@ -624,33 +638,56 @@ namespace uav_localize
     }
     //}
 
+    /* max_source_dissimilarity() method //{ */
+    double max_source_dissimilarity(Measurement::source_t source)
+    {
+      double ret = std::numeric_limits<double>::quiet_NaN();
+      // The dissimilarity value must be mapped to the dynamic reconfigure for all values here
+      // manually! Not mapping a value might cause unhandled runtime errors, so let's mark this
+      // as a compilation error.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
+      switch (source)
+      {
+        case Measurement::source_t::depth_detection:
+          ret = m_drmgr_ptr->config.depth_detections__max_update_dissimilarity;
+          break;
+        case Measurement::source_t::rgb_tracking:
+          ret = m_drmgr_ptr->config.rgb_trackings__max_update_dissimilarity;
+          break;
+      }
+#pragma GCC diagnostic pop
+      return ret;
+    }
+    //}
+
     /* find_closest_measurement() method //{ */
     /* returns position of the closest measurement in the pos_covs vector */
-    size_t find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& pos_covs, double& min_dissimilarity_out)
+    int find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& measurements, double& min_dissimilarity_out)
     {
       const Eigen::Vector3d hyp_pos = hyp.get_position();
       const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance();
       double min_dissimilarity = std::numeric_limits<double>::max();
-      size_t min_div_it = 0;
+      int min_dis_it = -1;
 
       // Find measurement with smallest dissimilarity from this hypothesis and assign the measurement to it
-      for (size_t it = 0; it < pos_covs.size(); it++)
+      for (size_t it = 0; it < measurements.size(); it++)
       {
-        const auto& pos_cov = pos_covs.at(it);
-        if (pos_cov.covariance.array().isNaN().any())
+        const auto& meas = measurements.at(it);
+        if (meas.covariance.array().isNaN().any())
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
-        const Eigen::Vector3d& det_pos = pos_cov.position;
-        const Eigen::Matrix3d& det_cov = pos_cov.covariance;
+        const Eigen::Vector3d& det_pos = meas.position;
+        const Eigen::Matrix3d& det_cov = meas.covariance;
         const double dissimilarity = calc_hyp_meas_dissimilarity(det_pos, det_cov, hyp_pos, hyp_cov);
 
-        if (dissimilarity < min_dissimilarity)
+        if (dissimilarity < min_dissimilarity && dissimilarity < max_source_dissimilarity(meas.source))
         {
           min_dissimilarity = dissimilarity;
-          min_div_it = it;
+          min_dis_it = it;
         }
       }
       min_dissimilarity_out = min_dissimilarity;
-      return min_div_it;
+      return min_dis_it;
     }
     //}
 
