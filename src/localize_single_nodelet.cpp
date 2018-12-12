@@ -62,10 +62,10 @@ namespace uav_localize
       uav_localize::LocalizationParamsConfig cfg = m_drmgr_ptr->config;
       m_drmgr_ptr->load_param("depth_detections/xy_covariance_coeff", cfg.depth_detections__xy_covariance_coeff);
       m_drmgr_ptr->load_param("depth_detections/z_covariance_coeff", cfg.depth_detections__z_covariance_coeff);
-      m_drmgr_ptr->load_param("depth_detections/max_update_dissimilarity", cfg.depth_detections__max_update_dissimilarity);
+      m_drmgr_ptr->load_param("depth_detections/min_update_likelihood", cfg.depth_detections__min_update_likelihood);
       m_drmgr_ptr->load_param("rgb_trackings/xy_covariance_coeff", cfg.rgb_trackings__xy_covariance_coeff);
       m_drmgr_ptr->load_param("rgb_trackings/z_covariance_coeff", cfg.rgb_trackings__z_covariance_coeff);
-      m_drmgr_ptr->load_param("rgb_trackings/max_update_dissimilarity", cfg.rgb_trackings__max_update_dissimilarity);
+      m_drmgr_ptr->load_param("rgb_trackings/min_update_likelihood", cfg.rgb_trackings__min_update_likelihood);
       m_drmgr_ptr->update_config(cfg);
       //}
       if (!m_drmgr_ptr->loaded_successfully())
@@ -181,6 +181,11 @@ namespace uav_localize
     void publish_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
       ros::Time stamp = ros::Time::now();
+
+      for (const auto& hyp : m_hyps)
+      {
+        cout << "#" << hyp.id << " l: " << hyp.get_last_loglikelihood() << endl;
+      }
 
       /* Find the most certain hypothesis //{ */
       Hypothesis const* most_certain_hyp = nullptr;
@@ -450,18 +455,17 @@ namespace uav_localize
     {
       vector<int> meas_used(measurements.size(), 0);
 
-      /* Assign a measurement to each LKF based on the smallest dissimilarity and update the LKF //{ */
+      /* Assign a measurement to each LKF based on the smallest likelihood and update the LKF //{ */
       for (auto& hyp : hyps)
       {
-        double dissimilarity;
-        int closest_it = find_closest_measurement(hyp, measurements, dissimilarity);
+        const auto [closest_it, loglikelihood]  = find_closest_measurement(hyp, measurements);
 
-        // Evaluate whether the dissimilarity is small enough to justify the update
+        // Evaluate whether the likelihood is small enough to justify the update
         if (closest_it >= 0)
         {
-          hyp.correction(measurements.at(closest_it));
+          hyp.correction(measurements.at(closest_it), loglikelihood);
           meas_used.at(closest_it)++;
-          NODELET_DEBUG("[LocalizeSingle]: Updated hypothesis ID%d using measurement from %s (dis.: %f)", hyp.id, measurements.at(closest_it).source_name().c_str(), dissimilarity);
+          NODELET_DEBUG("[LocalizeSingle]: Updated hypothesis ID%d using measurement from %s (l: %f)", hyp.id, measurements.at(closest_it).source_name().c_str(), exp(loglikelihood));
         }
       }
       //}
@@ -630,19 +634,23 @@ namespace uav_localize
     }
     //}
 
-    /* calc_hyp_meas_dissimilarity() method //{ */
-    static double calc_hyp_meas_dissimilarity(const Eigen::Vector3d& mu0, [[maybe_unused]] const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
-                                              const Eigen::Matrix3d& sigma1)
+    /* calc_hyp_meas_loglikelihood() method //{ */
+    template <unsigned num_dimensions>
+    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& measurement)
     {
-      return mahalanobis_distance(mu0, mu1, sigma1);
+      const auto [inn, inn_cov] = hyp.calc_innovation(measurement);
+      static const double dylog2pi = num_dimensions*log(2*M_PI);
+      const double a = inn.transpose() * inn_cov.inverse() * inn;
+      const double b = log(inn_cov.determinant());
+      return hyp.get_last_loglikelihood() - (a + b + dylog2pi)/2.0;
     }
     //}
 
-    /* max_source_dissimilarity() method //{ */
-    double max_source_dissimilarity(Measurement::source_t source)
+    /* min_source_likelihood() method //{ */
+    double min_source_likelihood(Measurement::source_t source)
     {
       double ret = std::numeric_limits<double>::quiet_NaN();
-      // The dissimilarity value must be mapped to the dynamic reconfigure for all values here
+      // The likelihood value must be mapped to the dynamic reconfigure for all values here
       // manually! Not mapping a value might cause unhandled runtime errors, so let's mark this
       // as a compilation error.
 #pragma GCC diagnostic push
@@ -650,10 +658,10 @@ namespace uav_localize
       switch (source)
       {
         case Measurement::source_t::depth_detection:
-          ret = m_drmgr_ptr->config.depth_detections__max_update_dissimilarity;
+          ret = m_drmgr_ptr->config.depth_detections__min_update_likelihood;
           break;
         case Measurement::source_t::rgb_tracking:
-          ret = m_drmgr_ptr->config.rgb_trackings__max_update_dissimilarity;
+          ret = m_drmgr_ptr->config.rgb_trackings__min_update_likelihood;
           break;
       }
 #pragma GCC diagnostic pop
@@ -663,31 +671,35 @@ namespace uav_localize
 
     /* find_closest_measurement() method //{ */
     /* returns position of the closest measurement in the pos_covs vector */
-    int find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& measurements, double& min_dissimilarity_out)
+    std::pair<int, double> find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& measurements)
     {
-      const Eigen::Vector3d hyp_pos = hyp.get_position();
-      const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance();
-      double min_dissimilarity = std::numeric_limits<double>::max();
-      int min_dis_it = -1;
+      /* const Eigen::Vector3d hyp_pos = hyp.get_position(); */
+      /* const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance(); */
+      double max_loglikelihood = std::numeric_limits<double>::min();
+      int max_dis_it = -1;
 
-      // Find measurement with smallest dissimilarity from this hypothesis and assign the measurement to it
+      // Find measurement with smallest likelihood from this hypothesis and assign the measurement to it
       for (size_t it = 0; it < measurements.size(); it++)
       {
         const auto& meas = measurements.at(it);
         if (meas.covariance.array().isNaN().any())
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
-        const Eigen::Vector3d& det_pos = meas.position;
-        const Eigen::Matrix3d& det_cov = meas.covariance;
-        const double dissimilarity = calc_hyp_meas_dissimilarity(det_pos, det_cov, hyp_pos, hyp_cov);
-
-        if (dissimilarity < min_dissimilarity && dissimilarity < max_source_dissimilarity(meas.source))
+        /* const Eigen::Vector3d& det_pos = meas.position; */
+        /* const Eigen::Matrix3d& det_cov = meas.covariance; */
+        const double dist = (hyp.get_position() - meas.position).norm();
+        if (dist < min_source_likelihood(meas.source))
         {
-          min_dissimilarity = dissimilarity;
-          min_dis_it = it;
+          const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas);
+          /* const double likelihood = exp(loglikelihood); */
+
+          if (loglikelihood < max_loglikelihood)
+          {
+            max_loglikelihood = loglikelihood;
+            max_dis_it = it;
+          }
         }
       }
-      min_dissimilarity_out = min_dissimilarity;
-      return min_dis_it;
+      return std::pair(max_dis_it, max_loglikelihood);
     }
     //}
 
@@ -909,10 +921,11 @@ namespace uav_localize
     /* kullback_leibler_divergence() method //{ */
     // This method calculates the Kullback-Leibler divergence of two three-dimensional normal distributions.
     // It is used for deciding which measurement to use for which hypothesis.
+    template <unsigned num_dimensions>
     static double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
                                               const Eigen::Matrix3d& sigma1)
     {
-      const unsigned k = 3;  // number of dimensions -- DON'T FORGET TO CHANGE IF NUMBER OF DIMENSIONS CHANGES!
+      const unsigned k = num_dimensions;  // number of dimensions -- DON'T FORGET TO CHANGE IF NUMBER OF DIMENSIONS CHANGES!
       const double div = 0.5
                          * ((sigma1.inverse() * sigma0).trace() + (mu1 - mu0).transpose() * (sigma1.inverse()) * (mu1 - mu0) - k
                             + log((sigma1.determinant()) / sigma0.determinant()));

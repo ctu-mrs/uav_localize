@@ -6,24 +6,24 @@ min_detection_height: 1.0  # meters above zero altitude
 # Covariance parameters, applied to depth detection measurements
 depth_detections:
   # Covariance of the detection measurement in the XY direction (in camera CS)
-  xy_covariance_coeff: 0.1
+  xy_covariance_coeff: 0.3
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
-  z_covariance_coeff: 0.1
-  # Maximal dissimilarity between a measurement and a LKF for the measurement to be considered
+  z_covariance_coeff: 0.3
+  # Maximal likelihood between a measurement and a LKF for the measurement to be considered
   # for association to a LKF
-  max_update_dissimilarity: 2.5
+  min_update_likelihood: 1
 
 # Covariance parameters, applied to rgb tracking measurements
 rgb_trackings:
   # Covariance of the detection measurement in the XY direction (in camera CS)
-  xy_covariance_coeff: 0.2
+  xy_covariance_coeff: 0.6
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
-  z_covariance_coeff: 1.0
-  # Maximal dissimilarity between a measurement and a LKF for the measurement to be considered
+  z_covariance_coeff: 3.0
+  # Maximal likelihood between a measurement and a LKF for the measurement to be considered
   # for association to a LKF
-  max_update_dissimilarity: 2.5
+  min_update_likelihood: 1
 
 ## Prediction parameters
 # Process noise of the LKF position states
