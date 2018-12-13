@@ -46,10 +46,13 @@ namespace uav_localize
       }
       //}
 
+      using lkf_bfr_t = boost::circular_buffer<Lkf>;
+      using meas_bfr_t = boost::circular_buffer<Measurement>;
+
     public:
       /* constructor //{ */
       Hypothesis(const int id, const Measurement& init_meas, double init_vel_std, size_t hist_len)
-        : id(id), m_n_corrections(0), m_loglikelihood(0)/*, m_lkfs(hist_len)*/
+        : id(id), m_n_corrections(0), m_loglikelihood(0), m_lkfs(hist_len), m_measurements(hist_len)
       {
         m_last_lkf_update = init_meas.stamp;
         m_last_measurement = init_meas;
@@ -62,8 +65,7 @@ namespace uav_localize
         lkf.P.block<3, 3>(0, 0) = init_meas.covariance;
         lkf.P.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
       
-        m_lkf = lkf;
-        /* m_lkfs.push_back(lkf); */
+        m_lkfs.push_back(lkf);
       };
       //}
 
@@ -75,9 +77,11 @@ namespace uav_localize
         const double dt = (stamp - m_last_lkf_update).toSec();
         const Lkf::A_t A = create_A(dt);
         const Lkf::Q_t Q = create_Q(dt, pos_std, vel_std);
-        m_lkf.A = A;
-        m_lkf.Q = Q;
-        m_lkf.prediction_step();
+        Lkf n_lkf = m_lkfs.back();
+        n_lkf.A = A;
+        n_lkf.Q = Q;
+        n_lkf.prediction_step();
+        m_lkfs.push_back(n_lkf);
         m_last_lkf_update = stamp;
       }
       //}
@@ -85,25 +89,55 @@ namespace uav_localize
       /* correction_step() method //{ */
       void correction_step(const Measurement& meas, double meas_loglikelihood)
       {
-        /* if (meas.stamp > m_last_lkf_update) */
-        /* { */
-          m_last_lkf_update = meas.stamp;
-          m_lkf.z = meas.position;
-          m_lkf.R = meas.covariance;
-        /* } else */
-        /* { */
-          /* const double dt = (meas.stamp - m_last_lkf_update).toSec(); */
-          /* const lkf_A_t invA = create_A(dt); */
-          /* m_lkf.z = meas.position; */
-          /* m_lkf.R = meas.covariance; */
-          /* m_lkf.doReCorrection(invA); */
-        /* } */
-        // TODO: This is probably not entirely true - verbessern
+        const lkf_bfr_t::iterator  lkf_prev_it  = find_prev(meas.stamp, m_lkfs);
+        const meas_bfr_t::iterator meas_next_it = find_prev(meas.stamp, m_measurements)+1;
+
+        Lkf first_lkf = *lkf_prev_it;
+        {
+          const double dt = (meas.stamp - lkf_prev_it->stamp).toSec();
+          first_lkf = predict(first_lkf, dt);
+          first_lkf = correct(first_lkf, meas.position, meas.covariance);
+        }
+        if (lkf_prev_it + 1 != m_lkfs.end())
+        {
+          ros::Time next_lkf_stamp = (lkf_prev_it+1)->stamp;
+          meas_bfr_t::iterator meas_it = meas_next_it;
+          while (meas_it != m_measurements.end() && (*meas_it).stamp < next_lkf_stamp)
+          {
+            const Measurement& cur_meas = *meas_it;
+            const double dt = (cur_meas.stamp - first_lkf.stamp).toSec();
+            first_lkf = predict(first_lkf, dt);
+            first_lkf = correct(first_lkf, meas.position, meas.covariance);
+          }
+
+          {
+            const double dt = (first_lkf.stamp - (lkf_prev_it+1)->stamp).toSec();
+            first_lkf = predict(first_lkf, dt);
+            *(lkf_prev_it+1) = first_lkf;
+          }
+        }
+
+        // similarly for the rest of the LKFs in the buffer
+
         m_loglikelihood = m_loglikelihood + meas_loglikelihood;
-        m_last_measurement = meas;
-        m_lkf.correction_step();
-        if (meas.reliable())
-          m_n_corrections++;
+        /* /1* if (meas.stamp > m_last_lkf_update) *1/ */
+        /* /1* { *1/ */
+        /*   m_last_lkf_update = meas.stamp; */
+        /*   m_lkf.z = meas.position; */
+        /*   m_lkf.R = meas.covariance; */
+        /* /1* } else *1/ */
+        /* /1* { *1/ */
+        /*   /1* const double dt = (meas.stamp - m_last_lkf_update).toSec(); *1/ */
+        /*   /1* const lkf_A_t invA = create_A(dt); *1/ */
+        /*   /1* m_lkf.z = meas.position; *1/ */
+        /*   /1* m_lkf.R = meas.covariance; *1/ */
+        /*   /1* m_lkf.doReCorrection(invA); *1/ */
+        /* /1* } *1/ */
+        /* // TODO: This is probably not entirely true - verbessern */
+        /* m_last_measurement = meas; */
+        /* m_lkf.correction_step(); */
+        /* if (meas.reliable()) */
+        /*   m_n_corrections++; */
       }
       //}
 
@@ -181,8 +215,8 @@ namespace uav_localize
       Measurement m_last_measurement;
       ros::Time m_last_lkf_update;
 
-      Lkf m_lkf;
-      /* boost::circular_buffer<Lkf> m_lkfs; */
+      lkf_bfr_t m_lkfs;
+      meas_bfr_t m_measurements;
   };
 }
 
