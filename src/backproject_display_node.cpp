@@ -183,6 +183,9 @@ int main(int argc, char** argv)
             const double dist = sqrt(pt3d.x*pt3d.x + pt3d.y*pt3d.y + pt3d.z*pt3d.z);
             const cv::Point pt2d = camera_model.project3dToPixel(pt3d);
 
+            if (hyp_msg.last_correction_source > 1)
+              ROS_WARN("[%s]: INVALID HYPOTHESIS SOURCE: %u!", ros::this_node::getName().c_str(), hyp_msg.last_correction_source);
+
             const cv::Scalar color = get_color(hyp_msg.last_correction_source);
             const int thickness = is_main ? 3 : 1;
             

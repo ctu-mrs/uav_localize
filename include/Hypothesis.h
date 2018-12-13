@@ -52,6 +52,7 @@ namespace uav_localize
         : id(id), m_n_corrections(0), m_loglikelihood(0)/*, m_lkfs(hist_len)*/
       {
         m_last_lkf_update = init_meas.stamp;
+        m_last_measurement = init_meas;
       
         // Initialize the LKF using the initialization measurement
         Lkf lkf(Lkf::A_t(), Lkf::B_t(), create_H(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
@@ -176,8 +177,8 @@ namespace uav_localize
 
     private:
       int64_t m_n_corrections;
-      Measurement m_last_measurement;
       double m_loglikelihood;
+      Measurement m_last_measurement;
       ros::Time m_last_lkf_update;
 
       Lkf m_lkf;
