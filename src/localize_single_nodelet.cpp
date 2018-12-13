@@ -62,10 +62,10 @@ namespace uav_localize
       uav_localize::LocalizationParamsConfig cfg = m_drmgr_ptr->config;
       m_drmgr_ptr->load_param("depth_detections/xy_covariance_coeff", cfg.depth_detections__xy_covariance_coeff);
       m_drmgr_ptr->load_param("depth_detections/z_covariance_coeff", cfg.depth_detections__z_covariance_coeff);
-      m_drmgr_ptr->load_param("depth_detections/min_update_likelihood", cfg.depth_detections__min_update_likelihood);
+      m_drmgr_ptr->load_param("depth_detections/min_update_likelihood", cfg.depth_detections__max_gating_distance);
       m_drmgr_ptr->load_param("rgb_trackings/xy_covariance_coeff", cfg.rgb_trackings__xy_covariance_coeff);
       m_drmgr_ptr->load_param("rgb_trackings/z_covariance_coeff", cfg.rgb_trackings__z_covariance_coeff);
-      m_drmgr_ptr->load_param("rgb_trackings/min_update_likelihood", cfg.rgb_trackings__min_update_likelihood);
+      m_drmgr_ptr->load_param("rgb_trackings/min_update_likelihood", cfg.rgb_trackings__max_gating_distance);
       m_drmgr_ptr->update_config(cfg);
       //}
       if (!m_drmgr_ptr->loaded_successfully())
@@ -184,7 +184,7 @@ namespace uav_localize
 
       for (const auto& hyp : m_hyps)
       {
-        cout << "#" << hyp.id << " l: " << hyp.get_last_loglikelihood() << endl;
+        cout << "#" << hyp.id << " l: " << hyp.get_loglikelihood() << endl;
       }
 
       /* Find the most certain hypothesis //{ */
@@ -687,7 +687,7 @@ namespace uav_localize
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
         const double dist = mahalanobis_distance(meas.position, hyp.get_position(), hyp.get_position_covariance());
-        if (dist2 < max_gating_distance(meas.source))
+        if (dist < max_gating_distance(meas.source))
         {
           const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas);
           /* const double likelihood = exp(loglikelihood); */
