@@ -182,10 +182,10 @@ namespace uav_localize
     {
       ros::Time stamp = ros::Time::now();
 
-      for (const auto& hyp : m_hyps)
-      {
-        cout << "#" << hyp.id << " l: " << hyp.get_loglikelihood() << endl;
-      }
+      /* for (const auto& hyp : m_hyps) */
+      /* { */
+      /*   cout << "#" << hyp.id << " l: " << hyp.get_loglikelihood() << endl; */
+      /* } */
 
       /* Find the most certain hypothesis //{ */
       Hypothesis const* most_certain_hyp = nullptr;
@@ -470,12 +470,12 @@ namespace uav_localize
       }
       //}
 
-      /* Instantiate new hypotheses for unused measurements (these are not considered as candidates for the most certain hypothesis) //{ */
+      /* Instantiate new hypotheses for unused reliable measurements //{ */
       {
         int new_hyps = 0;
         for (size_t it = 0; it < measurements.size(); it++)
         {
-          if (meas_used.at(it) < 1)
+          if (meas_used.at(it) < 1 && measurements.at(it).reliable())
           {
             Hypothesis new_hyp = create_new_hyp(measurements.at(it), m_last_hyp_id, m_drmgr_ptr->config.init_vel_cov);
             m_hyps.push_back(new_hyp);
@@ -672,7 +672,7 @@ namespace uav_localize
     //}
 
     /* find_closest_measurement() method //{ */
-    /* returns position of the closest measurement in the pos_covs vector */
+    /* returns position of the closest measurement in the pos_covs vector and its corresponding log-likelihood */
     std::pair<int, double> find_closest_measurement(const Hypothesis& hyp, const std::vector<Measurement>& measurements)
     {
       /* const Eigen::Vector3d hyp_pos = hyp.get_position(); */

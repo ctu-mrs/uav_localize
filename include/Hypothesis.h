@@ -26,7 +26,7 @@ namespace uav_localize
         if (meas.reliable())
           m_n_corrections++;
         m_last_measurement = meas;
-        m_loglikelihood = m_loglikelihood - meas_loglikelihood;
+        m_loglikelihood = m_loglikelihood + meas_loglikelihood;
         lkf.setMeasurement(meas.position, meas.covariance);
         lkf.doCorrection();
       }
