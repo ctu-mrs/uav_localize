@@ -447,7 +447,7 @@ namespace uav_localize
       /* Assign a measurement to each LKF based on the smallest likelihood and update the LKF //{ */
       for (auto& hyp : hyps)
       {
-        const auto [closest_it, loglikelihood]  = find_closest_measurement(hyp, measurements);
+        const auto [closest_it, loglikelihood] = find_closest_measurement(hyp, measurements);
 
         // Evaluate whether the likelihood is small enough to justify the update
         if (closest_it >= 0)

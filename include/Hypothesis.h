@@ -57,9 +57,9 @@ namespace uav_localize
         Lkf lkf(Lkf::A_t(), Lkf::B_t(), create_H(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
         lkf.x.block<3, 1>(0, 0) = init_meas.position;
         lkf.x.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
-        lkf.Q.setZero();
-        lkf.Q.block<3, 3>(0, 0) = init_meas.covariance;
-        lkf.Q.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
+        lkf.P.setZero();
+        lkf.P.block<3, 3>(0, 0) = init_meas.covariance;
+        lkf.P.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
       
         m_lkf = lkf;
         /* m_lkfs.push_back(lkf); */
@@ -84,19 +84,19 @@ namespace uav_localize
       /* correction_step() method //{ */
       void correction_step(const Measurement& meas, double meas_loglikelihood)
       {
-        if (meas.stamp > m_last_lkf_update)
-        {
+        /* if (meas.stamp > m_last_lkf_update) */
+        /* { */
           m_last_lkf_update = meas.stamp;
           m_lkf.z = meas.position;
           m_lkf.R = meas.covariance;
-        } else
-        {
+        /* } else */
+        /* { */
           /* const double dt = (meas.stamp - m_last_lkf_update).toSec(); */
           /* const lkf_A_t invA = create_A(dt); */
           /* m_lkf.z = meas.position; */
           /* m_lkf.R = meas.covariance; */
           /* m_lkf.doReCorrection(invA); */
-        }
+        /* } */
         // TODO: This is probably not entirely true - verbessern
         m_loglikelihood = m_loglikelihood + meas_loglikelihood;
         m_last_measurement = meas;
