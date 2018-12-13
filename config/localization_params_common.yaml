@@ -7,7 +7,7 @@
 process_loop_rate: 200 # Hz
 # Rate of the loop for publishing latest localization
 # estimate. Set as high as desired.
-publish_loop_rate: 2 # Hz
+publish_loop_rate: 25 # Hz
 # Rate of the loop for updating the Kalman filters.
 update_loop_rate:  50 # Hz
 # Rate of the loop for printing out info about the node.

@@ -62,10 +62,10 @@ namespace uav_localize
       uav_localize::LocalizationParamsConfig cfg = m_drmgr_ptr->config;
       m_drmgr_ptr->load_param("depth_detections/xy_covariance_coeff", cfg.depth_detections__xy_covariance_coeff);
       m_drmgr_ptr->load_param("depth_detections/z_covariance_coeff", cfg.depth_detections__z_covariance_coeff);
-      m_drmgr_ptr->load_param("depth_detections/min_update_likelihood", cfg.depth_detections__max_gating_distance);
+      m_drmgr_ptr->load_param("depth_detections/max_gating_distance", cfg.depth_detections__max_gating_distance);
       m_drmgr_ptr->load_param("rgb_trackings/xy_covariance_coeff", cfg.rgb_trackings__xy_covariance_coeff);
       m_drmgr_ptr->load_param("rgb_trackings/z_covariance_coeff", cfg.rgb_trackings__z_covariance_coeff);
-      m_drmgr_ptr->load_param("rgb_trackings/min_update_likelihood", cfg.rgb_trackings__max_gating_distance);
+      m_drmgr_ptr->load_param("rgb_trackings/max_gating_distance", cfg.rgb_trackings__max_gating_distance);
       m_drmgr_ptr->update_config(cfg);
       //}
       if (!m_drmgr_ptr->loaded_successfully())
@@ -636,11 +636,13 @@ namespace uav_localize
 
     /* calc_hyp_meas_loglikelihood() method //{ */
     template <unsigned num_dimensions>
-    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& measurement)
+    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas, const double mahalanobis_distance2)
     {
-      const auto [inn, inn_cov] = hyp.calc_innovation(measurement);
+      /* const auto [inn, inn_cov] = hyp.calc_innovation(meas); */
+      const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance();
       static const double dylog2pi = num_dimensions*log(2*M_PI);
-      const double a = inn.transpose() * inn_cov.inverse() * inn;
+      /* const double a = inn.transpose() * inn_cov.inverse() * inn; */
+      const double a = mahalanobis_distance2;
       const double b = log(inn_cov.determinant());
       return - (a + b + dylog2pi)/2.0;
     }
@@ -686,10 +688,11 @@ namespace uav_localize
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
-        const double dist = mahalanobis_distance(meas.position, hyp.get_position(), hyp.get_position_covariance());
-        if (dist < max_gating_distance(meas.source))
+        const double dist2 = mahalanobis_distance2(meas.position, hyp.get_position(), hyp.get_position_covariance());
+        const double max_dist = max_gating_distance(meas.source);
+        if (dist2 < max_dist*max_dist)
         {
-          const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas);
+          const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas, dist2);
           /* const double likelihood = exp(loglikelihood); */
 
           if (loglikelihood < max_loglikelihood)
@@ -919,8 +922,7 @@ namespace uav_localize
     // --------------------------------------------------------------
 
     /* kullback_leibler_divergence() method //{ */
-    // This method calculates the Kullback-Leibler divergence of two three-dimensional normal distributions.
-    // It is used for deciding which measurement to use for which hypothesis.
+    // This method calculates the Kullback-Leibler divergence of two n-dimensional normal distributions.
     template <unsigned num_dimensions>
     static double kullback_leibler_divergence(const Eigen::Vector3d& mu0, const Eigen::Matrix3d& sigma0, const Eigen::Vector3d& mu1,
                                               const Eigen::Matrix3d& sigma1)
@@ -933,14 +935,13 @@ namespace uav_localize
     }
     //}
 
-    /* mahalanobis_distance() method //{ */
-    // This method calculates the Mahalanobis distance of an observation to a normal distributions.
-    // It is used for deciding which measurement to use for which hypothesis.
-    static double mahalanobis_distance(const Eigen::Vector3d& x, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
+    /* mahalanobis_distance2() method //{ */
+    // This method calculates square of the Mahalanobis distance of an observation to a normal distributions.
+    static double mahalanobis_distance2(const Eigen::Vector3d& x, const Eigen::Vector3d& mu1, const Eigen::Matrix3d& sigma1)
     {
       const auto diff = x - mu1;
-      const double dist = sqrt(diff.transpose() * sigma1.inverse() * diff);
-      return dist;
+      const double dist2 = diff.transpose() * sigma1.inverse() * diff;
+      return dist2;
     }
     //}
 
