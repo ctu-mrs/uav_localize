@@ -57,9 +57,9 @@ namespace uav_localize
         Lkf lkf(Lkf::A_t(), Lkf::B_t(), create_H(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
         lkf.x.block<3, 1>(0, 0) = init_meas.position;
         lkf.x.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
-        lkf.R.setZero();
-        lkf.R.block<3, 3>(0, 0) = init_meas.covariance;
-        lkf.R.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
+        lkf.Q.setZero();
+        lkf.Q.block<3, 3>(0, 0) = init_meas.covariance;
+        lkf.Q.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
       
         m_lkf = lkf;
         /* m_lkfs.push_back(lkf); */

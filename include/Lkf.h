@@ -34,7 +34,9 @@ namespace uav_localize
 
   public:
     Lkf() {};
-    Lkf(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R);
+    Lkf(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
+      : A(A), B(B), H(H), P(P), Q(Q), R(R)
+    {};
 
     /* prediction_step() method //{ */
     void prediction_step()
@@ -74,10 +76,10 @@ namespace uav_localize
   public:
     A_t A;  // system matrix n*n
     B_t B;  // input matrix n*m
+    H_t H;  // measurement mapping p*n
     P_t P;  // state vector covariance n*n
     Q_t Q;  // process covariance n*n
     R_t R;  // measurement covariance p*p
-    H_t H;  // measurement mapping p*n
 
     x_t x;  // state vector
     z_t z;  // measurement vector
