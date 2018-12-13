@@ -466,7 +466,7 @@ namespace uav_localize
         {
           if (meas_used.at(it) < 1 && measurements.at(it).reliable())
           {
-            Hypothesis new_hyp(++m_last_hyp_id, measurements.at(it), m_drmgr_ptr->config.init_vel_cov);
+            Hypothesis new_hyp(++m_last_hyp_id, measurements.at(it), m_drmgr_ptr->config.init_vel_cov, 100);
             m_hyps.push_back(new_hyp);
             new_hyps++;
           }

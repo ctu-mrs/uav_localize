@@ -37,12 +37,12 @@ namespace uav_localize
         return H;
       }
 
-      inline Lkf::Q_t create_Q(double dt, double pos_std, double vel_std) const
+      inline Lkf::R_t create_R(double dt, double pos_std, double vel_std) const
       {
-        Lkf::Q_t Q = Lkf::Q_t::Identity();
-        Q.block<3, 3>(0, 0) *= dt * pos_std;
-        Q.block<3, 3>(3, 3) *= dt * vel_std;
-        return Q;
+        Lkf::R_t R = Lkf::R_t::Identity();
+        R.block<3, 3>(0, 0) *= dt * pos_std;
+        R.block<3, 3>(3, 3) *= dt * vel_std;
+        return R;
       }
       //}
 
@@ -54,15 +54,19 @@ namespace uav_localize
         m_last_lkf_update = init_meas.stamp;
       
         // Initialize the LKF using the initialization measurement
-        Lkf lkf(Lkf::A_t(), Lkf::B_t(), create_H(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
-        lkf.x.block<3, 1>(0, 0) = init_meas.position;
-        lkf.x.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
-        lkf.R.setZero();
-        lkf.R.block<3, 3>(0, 0) = init_meas.covariance;
-        lkf.R.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
+        Lkf lkf(Lkf::A_t(), Lkf::B_t(), Lkf::H_t(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
+        Lkf::x_t init_state;
+        init_state.block<3, 1>(0, 0) = init_meas.position;
+        init_state.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
+        lkf_R_t init_state_cov;
+        init_state_cov.setZero();
+        init_state_cov.block<3, 3>(0, 0) = init_meas.covariance;
+        init_state_cov.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
       
-        m_lkf = lkf;
-        /* m_lkfs.push_back(lkf); */
+        lkf.setStates(init_state);
+        lkf.setCovariance(init_state_cov);
+
+        m_lkfs.push_back(lkf);
       };
       //}
 
@@ -72,10 +76,10 @@ namespace uav_localize
       void prediction_step(const ros::Time& stamp, double pos_std, double vel_std)
       {
         const double dt = (stamp - m_last_lkf_update).toSec();
-        const Lkf::A_t A = create_A(dt);
-        const Lkf::Q_t Q = create_Q(dt, pos_std, vel_std);
+        const lkf_A_t A = create_A(dt);
+        const lkf_R_t R = create_R(dt, pos_std, vel_std);
         m_lkf.A = A;
-        m_lkf.Q = Q;
+        m_lkf.R = R;
         m_lkf.prediction_step();
         m_last_lkf_update = stamp;
       }
@@ -100,7 +104,7 @@ namespace uav_localize
         // TODO: This is probably not entirely true - verbessern
         m_loglikelihood = m_loglikelihood + meas_loglikelihood;
         m_last_measurement = meas;
-        m_lkf.correction_step();
+        m_lkf.correction();
         if (meas.reliable())
           m_n_corrections++;
       }
