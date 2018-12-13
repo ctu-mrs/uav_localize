@@ -15,7 +15,7 @@ namespace uav_localize
                 const Eigen::MatrixXd A, const Eigen::MatrixXd B,
                 const Eigen::MatrixXd R, const Eigen::MatrixXd Q,
                 const Eigen::MatrixXd P)
-        : lkf(n, m, p, A, B, R, Q, P), id(id), m_n_corrections(0), m_last_loglikelihood(0)
+        : lkf(n, m, p, A, B, R, Q, P), id(id), m_n_corrections(0), m_loglikelihood(0)
       {};
 
       mrs_lib::Lkf lkf;
@@ -26,16 +26,19 @@ namespace uav_localize
         if (meas.reliable())
           m_n_corrections++;
         m_last_measurement = meas;
-        m_last_loglikelihood = meas_loglikelihood;
+        m_loglikelihood = m_loglikelihood - meas_loglikelihood;
         lkf.setMeasurement(meas.position, meas.covariance);
         lkf.doCorrection();
       }
 
       std::tuple<Eigen::Vector3d, Eigen::Matrix3d> calc_innovation(const Measurement& meas) const
       {
-        const Eigen::Matrix3d P = lkf.getP().block<3, 3>(0, 0); // simplify the matrix calculations a bit by ignoring the higher derivation states
-        const Eigen::Vector3d inn = meas.position - P*get_position();
-        const Eigen::Matrix3d inn_cov = meas.covariance + P*get_position_covariance()*P.transpose();
+        /* const Eigen::Matrix3d P = lkf.getP().block<3, 3>(0, 0); // simplify the matrix calculations a bit by ignoring the higher derivation states */
+        /* const Eigen::Vector3d inn = meas.position - P*get_position(); */
+        /* const Eigen::Matrix3d inn_cov = meas.covariance + P*get_position_covariance()*P.transpose(); */
+        // version for this specific case (position is directly measured)
+        const Eigen::Vector3d inn = meas.position - get_position();
+        const Eigen::Matrix3d inn_cov = meas.covariance + get_position_covariance();
         return std::tuple(inn, inn_cov);
       }
 
@@ -44,9 +47,9 @@ namespace uav_localize
         return m_n_corrections;
       }
       
-      inline double get_last_loglikelihood() const
+      inline double get_loglikelihood() const
       {
-        return m_last_loglikelihood;
+        return m_loglikelihood;
       }
 
       inline Measurement get_last_measurement(void) const
@@ -67,7 +70,7 @@ namespace uav_localize
     private:
       int64_t m_n_corrections;
       Measurement m_last_measurement;
-      double m_last_loglikelihood;
+      double m_loglikelihood;
   };
 }
 

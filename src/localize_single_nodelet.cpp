@@ -642,12 +642,12 @@ namespace uav_localize
       static const double dylog2pi = num_dimensions*log(2*M_PI);
       const double a = inn.transpose() * inn_cov.inverse() * inn;
       const double b = log(inn_cov.determinant());
-      return hyp.get_last_loglikelihood() - (a + b + dylog2pi)/2.0;
+      return - (a + b + dylog2pi)/2.0;
     }
     //}
 
-    /* min_source_likelihood() method //{ */
-    double min_source_likelihood(Measurement::source_t source)
+    /* max_gating_distance() method //{ */
+    double max_gating_distance(Measurement::source_t source)
     {
       double ret = std::numeric_limits<double>::quiet_NaN();
       // The likelihood value must be mapped to the dynamic reconfigure for all values here
@@ -658,10 +658,10 @@ namespace uav_localize
       switch (source)
       {
         case Measurement::source_t::depth_detection:
-          ret = m_drmgr_ptr->config.depth_detections__min_update_likelihood;
+          ret = m_drmgr_ptr->config.depth_detections__max_gating_distance;
           break;
         case Measurement::source_t::rgb_tracking:
-          ret = m_drmgr_ptr->config.rgb_trackings__min_update_likelihood;
+          ret = m_drmgr_ptr->config.rgb_trackings__max_gating_distance;
           break;
       }
 #pragma GCC diagnostic pop
@@ -686,8 +686,8 @@ namespace uav_localize
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
-        const double dist = (hyp.get_position() - meas.position).norm();
-        if (dist < min_source_likelihood(meas.source))
+        const double dist = mahalanobis_distance(meas.position, hyp.get_position(), hyp.get_position_covariance());
+        if (dist2 < max_gating_distance(meas.source))
         {
           const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas);
           /* const double likelihood = exp(loglikelihood); */

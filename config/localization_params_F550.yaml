@@ -10,9 +10,9 @@ depth_detections:
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
   z_covariance_coeff: 0.3
-  # Maximal likelihood between a measurement and a LKF for the measurement to be considered
-  # for association to a LKF
-  min_update_likelihood: 1
+  # Maximal mahalanobis distance between a measurement and a hypothesis for the measurement
+  # to be considered for association to the hypothesis
+  max_gating_distance: 2.5
 
 # Covariance parameters, applied to rgb tracking measurements
 rgb_trackings:
@@ -21,9 +21,9 @@ rgb_trackings:
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
   z_covariance_coeff: 3.0
-  # Maximal likelihood between a measurement and a LKF for the measurement to be considered
-  # for association to a LKF
-  min_update_likelihood: 1
+  # Maximal mahalanobis distance between a measurement and a hypothesis for the measurement
+  # to be considered for association to the hypothesis
+  max_gating_distance: 2.5
 
 ## Prediction parameters
 # Process noise of the LKF position states
