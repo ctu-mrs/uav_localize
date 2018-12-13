@@ -239,23 +239,12 @@ namespace uav_localize
     /* lkf_update_loop() method //{ */
     void lkf_update_loop(const ros::TimerEvent& evt)
     {
-      /* Prepare new LKF matrices A and R based on current dt //{ */
-      const double dt = (evt.current_real - evt.last_real).toSec();
-      const lkf_A_t A = create_A(dt);
-      const lkf_R_t R = create_R(dt);
-      //}
-
-      /* Iterate LKFs in all hypotheses //{ */
+      // Iterate LKFs in all hypotheses
+      std::lock_guard<std::mutex> lck(m_hyps_mtx);
+      for (auto& hyp : m_hyps)
       {
-        std::lock_guard<std::mutex> lck(m_hyps_mtx);
-        for (auto& hyp : m_hyps)
-        {
-          hyp.lkf.setA(A);
-          hyp.lkf.setR(R);
-          hyp.lkf.iterateWithoutCorrection();
-        }
+        hyp.prediction_step(evt.current_real, m_drmgr_ptr->config.lkf_process_noise_pos,  m_drmgr_ptr->config.lkf_process_noise_vel);
       }
-      //}
     }
     //}
 
@@ -463,7 +452,7 @@ namespace uav_localize
         // Evaluate whether the likelihood is small enough to justify the update
         if (closest_it >= 0)
         {
-          hyp.correction(measurements.at(closest_it), loglikelihood);
+          hyp.correction_step(measurements.at(closest_it), loglikelihood);
           meas_used.at(closest_it)++;
           NODELET_DEBUG("[LocalizeSingle]: Updated hypothesis ID%d using measurement from %s (l: %f)", hyp.id, measurements.at(closest_it).source_name().c_str(), exp(loglikelihood));
         }
@@ -477,7 +466,7 @@ namespace uav_localize
         {
           if (meas_used.at(it) < 1 && measurements.at(it).reliable())
           {
-            Hypothesis new_hyp = create_new_hyp(measurements.at(it), m_last_hyp_id, m_drmgr_ptr->config.init_vel_cov);
+            Hypothesis new_hyp(++m_last_hyp_id, measurements.at(it), m_drmgr_ptr->config.init_vel_cov);
             m_hyps.push_back(new_hyp);
             new_hyps++;
           }
@@ -639,7 +628,7 @@ namespace uav_localize
     static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas, const double mahalanobis_distance2)
     {
       /* const auto [inn, inn_cov] = hyp.calc_innovation(meas); */
-      const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance();
+      const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance_at(meas.stamp);
       static const double dylog2pi = num_dimensions*log(2*M_PI);
       /* const double a = inn.transpose() * inn_cov.inverse() * inn; */
       const double a = mahalanobis_distance2;
@@ -688,7 +677,7 @@ namespace uav_localize
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
-        const double dist2 = mahalanobis_distance2(meas.position, hyp.get_position(), hyp.get_position_covariance());
+        const double dist2 = mahalanobis_distance2(meas.position, hyp.get_position_at(meas.stamp), hyp.get_position_covariance());
         const double max_dist = max_gating_distance(meas.source);
         if (dist2 < max_dist*max_dist)
         {
@@ -843,77 +832,13 @@ namespace uav_localize
 
   private:
     // --------------------------------------------------------------
-    // |                hypotheses and LKF variables                |
+    // |                hypotheses related variables                |
     // --------------------------------------------------------------
 
     /* Hypotheses - related member variables //{ */
     std::mutex m_hyps_mtx;         // mutex for synchronization of the m_hyps variable
     std::list<Hypothesis> m_hyps;  // all currently active hypotheses
     int32_t m_last_hyp_id;         // ID of the last created hypothesis - used when creating a new hypothesis to generate a new unique ID
-    //}
-
-    /* Definitions of the LKF (consts, typedefs, etc.) //{ */
-    static const int c_n_states = 6;
-    static const int c_n_inputs = 0;
-    static const int c_n_measurements = 3;
-
-    typedef Eigen::Matrix<double, c_n_states, 1> lkf_x_t;
-    typedef Eigen::Matrix<double, c_n_inputs, 1> lkf_u_t;
-    typedef Eigen::Matrix<double, c_n_measurements, 1> lkf_z_t;
-
-    typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_A_t;
-    typedef Eigen::Matrix<double, c_n_states, c_n_inputs> lkf_B_t;
-    typedef Eigen::Matrix<double, c_n_measurements, c_n_states> lkf_P_t;
-    typedef Eigen::Matrix<double, c_n_states, c_n_states> lkf_R_t;
-    typedef Eigen::Matrix<double, c_n_measurements, c_n_measurements> lkf_Q_t;
-
-    inline static lkf_A_t create_A(double dt)
-    {
-      lkf_A_t A;
-      A << 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1;
-      return A;
-    }
-
-    inline static lkf_P_t create_P()
-    {
-      lkf_P_t P;
-      P << 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0;
-      return P;
-    }
-
-    inline lkf_R_t create_R(double dt) const
-    {
-      lkf_R_t R = lkf_R_t::Identity();
-      R.block<3, 3>(0, 0) *= dt * m_drmgr_ptr->config.lkf_process_noise_pos;
-      R.block<3, 3>(3, 3) *= dt * m_drmgr_ptr->config.lkf_process_noise_vel;
-      return R;
-    }
-    //}
-
-    /* create_new_hyp() method //{ */
-    static Hypothesis create_new_hyp(const Measurement& initialization, int& last_hyp_id, const double init_vel_cov)
-    {
-      const lkf_A_t A;  // changes in dependence on the measured dt, so leave blank for now
-      const lkf_B_t B;  // zero rows zero cols matrix
-      const lkf_P_t P = create_P();
-      const lkf_R_t R;  // depends on the measured dt, so leave blank for now
-      const lkf_Q_t Q;  // depends on the measurement, so leave blank for now
-
-      Hypothesis new_hyp(++last_hyp_id, LocalizeSingle::c_n_states, LocalizeSingle::c_n_inputs, LocalizeSingle::c_n_measurements, A, B, R, Q, P);
-
-      // Initialize the LKF using the new measurement
-      lkf_x_t init_state;
-      init_state.block<3, 1>(0, 0) = initialization.position;
-      init_state.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
-      lkf_R_t init_state_cov;
-      init_state_cov.setZero();
-      init_state_cov.block<3, 3>(0, 0) = initialization.covariance;
-      init_state_cov.block<3, 3>(3, 3) = init_vel_cov * Eigen::Matrix3d::Identity();
-
-      new_hyp.lkf.setStates(init_state);
-      new_hyp.lkf.setCovariance(init_state_cov);
-      return new_hyp;
-    }
     //}
 
   private:
