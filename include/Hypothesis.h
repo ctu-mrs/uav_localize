@@ -84,55 +84,20 @@ namespace uav_localize
     //}
 
     /* correction_step() method //{ */
-    void correction_step(const Measurement& meas, double meas_loglikelihood)
+    void correction_step(const Measurement& meas, [[maybe_unused]] double meas_loglikelihood)
     {
       // there must already be at least one lkf in the buffer (which should be true)
       const lkf_bfr_t::iterator lkf_prev_it = remove_const(find_prev(meas.stamp, m_lkfs), m_lkfs);
-      const meas_bfr_t::const_iterator meas_next_it = find_prev(meas.stamp, m_measurements) + 1;
+      const meas_bfr_t::iterator meas_next_it = remove_const(find_prev(meas.stamp, m_measurements), m_measurements)+1;
 
-      Lkf first_lkf = *lkf_prev_it;
-      {
-        first_lkf = predict(first_lkf, meas.stamp);
-        first_lkf = correct(first_lkf, meas.position, meas.covariance, meas.stamp);
-      }
-      if (lkf_prev_it + 1 != m_lkfs.end())
-      {
-        ros::Time next_lkf_stamp = (lkf_prev_it + 1)->stamp;
-        meas_bfr_t::const_iterator meas_it = meas_next_it;
-        while (meas_it != m_measurements.end() && (*meas_it).stamp < next_lkf_stamp)
-        {
-          const Measurement& cur_meas = *meas_it;
-          first_lkf = predict(first_lkf, cur_meas.stamp);
-          first_lkf = correct(first_lkf, meas.position, meas.covariance, cur_meas.stamp);
-        }
+      // insert the new measurement into the measurement buffer (potentially kicking out the oldest measurement
+      // at the beginning of the buffer)
+      const meas_bfr_t::const_iterator meas_new_it = m_measurements.insert(meas_next_it, meas);
+      // update the LKFs according to the new measurement history
+      update_lkf_history(lkf_prev_it, meas_new_it);
 
-        {
-          first_lkf = predict(first_lkf, (lkf_prev_it + 1)->stamp);
-          *(lkf_prev_it + 1) = first_lkf;
-        }
-      }
-
-      // similarly for the rest of the LKFs in the buffer
-
-      m_loglikelihood = m_loglikelihood + meas_loglikelihood;
-      /* /1* if (meas.stamp > m_last_lkf_update) *1/ */
-      /* /1* { *1/ */
-      /*   m_last_lkf_update = meas.stamp; */
-      /*   m_lkf.z = meas.position; */
-      /*   m_lkf.R = meas.covariance; */
-      /* /1* } else *1/ */
-      /* /1* { *1/ */
-      /*   /1* const double dt = (meas.stamp - m_last_lkf_update).toSec(); *1/ */
-      /*   /1* const lkf_A_t invA = create_A(dt); *1/ */
-      /*   /1* m_lkf.z = meas.position; *1/ */
-      /*   /1* m_lkf.R = meas.covariance; *1/ */
-      /*   /1* m_lkf.doReCorrection(invA); *1/ */
-      /* /1* } *1/ */
-      /* // TODO: This is probably not entirely true - verbessern */
-      /* m_last_measurement = meas; */
-      /* m_lkf.correction_step(); */
-      /* if (meas.reliable()) */
-      /*   m_n_corrections++; */
+      if (meas.reliable())
+        m_n_corrections++;
     }
     //}
 
@@ -246,6 +211,47 @@ namespace uav_localize
       return m;
     }
     //}
+
+
+    void update_lkf_history(const lkf_bfr_t::iterator& first_lkf_it, const meas_bfr_t::const_iterator& first_meas_it)
+    {
+      using lkf_it = lkf_bfr_t::iterator;
+      using meas_it = meas_bfr_t::const_iterator;
+      lkf_it cur_lkf_it = first_lkf_it;
+      meas_it cur_meas_it = first_meas_it;
+      Lkf updating_lkf = *cur_lkf_it;
+
+      while (cur_lkf_it != m_lkfs.end())
+      {
+        Lkf& cur_lkf = *cur_lkf_it;
+
+        while (cur_meas_it != m_measurements.end()
+            && (cur_lkf_it+1 == m_lkfs.end() || (*cur_meas_it).stamp < (cur_lkf_it+1)->stamp))
+        {
+          const Measurement& cur_meas = *cur_meas_it;
+          updating_lkf = predict(updating_lkf, cur_meas.stamp);
+          updating_lkf = correct(updating_lkf, cur_meas.position, cur_meas.covariance, cur_meas.stamp);
+          updating_lkf.source = cur_meas.source;
+          cur_meas_it++;
+        }
+
+        // predict the LKF at the time of the next one in the queue
+        updating_lkf = predict(updating_lkf, cur_lkf.stamp);
+        // replace the newer LKF in the queue with the continuation of the first one
+        cur_lkf = updating_lkf;
+
+        if (cur_meas_it == m_measurements.end())
+          break;
+        cur_lkf_it++;
+      }
+
+      /* // if the last LKF was updated with a new measurement, add it to the */ 
+      /* if (cur_lkf_it != m_lkfs.end()) */
+      /* { */
+        
+      /* } */
+    }
+
 
     /* predict() method //{ */
     Lkf predict(Lkf lkf, const ros::Time& to_stamp, double pos_std, double vel_std)

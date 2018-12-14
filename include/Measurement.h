@@ -12,7 +12,8 @@ namespace uav_localize
     enum source_t
     {
       depth_detection = uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION,
-      rgb_tracking = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING
+      rgb_tracking    = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING,
+      lkf_prediction  = uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION
     };
 
   public:

@@ -9,3 +9,4 @@ uint8               last_correction_source
 
 uint8               SOURCE_DEPTH_DETECTION=0
 uint8               SOURCE_RGB_TRACKING=1
+uint8               SOURCE_LKF_PREDICTION=2

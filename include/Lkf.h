@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <std_msgs/Time.h>
+#include "Measurement.h"
 
 namespace uav_localize
 {
@@ -138,12 +139,15 @@ namespace uav_localize
   public:
     Lkf_stamped()
       : Base_class()
-    {};
+    {
+      source = Measurement::source_t::lkf_prediction;
+    };
     Lkf_stamped(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
-      : Base_class(A, B, H, P, Q, R)
+      : Lkf_stamped(), Base_class(A, B, H, P, Q, R)
     {};
 
   public:
     ros::Time stamp;
+    Measurement::source_t source;
   };
 }  // namespace uav_localize
