@@ -1,9 +1,10 @@
 #include <Eigen/Dense>
+#include <std_msgs/Time.h>
 
 namespace uav_localize
 {
   template <unsigned n_states, unsigned n_inputs, unsigned n_measurements>
-  class Lkf
+  class Lkf_base
   {
   public:
     /* LKF definitions (typedefs, constants etc) //{ */
@@ -33,8 +34,8 @@ namespace uav_localize
     //}
 
   public:
-    Lkf() {};
-    Lkf(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
+    Lkf_base() {};
+    Lkf_base(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
       : A(A), B(B), H(H), P(P), Q(Q), R(R)
     {};
 
@@ -113,4 +114,36 @@ namespace uav_localize
 
   };
 
+  template <unsigned n_states, unsigned n_inputs, unsigned n_measurements>
+  class Lkf_stamped : public Lkf_base<n_states, n_inputs, n_measurements>
+  {
+  public:
+    /* LKF definitions (typedefs, constants etc) //{ */
+    using Base_class = Lkf_base<n_states, n_inputs, n_measurements>;
+
+    using x_t = typename Base_class::x_t ;  // state vector n*1
+    using u_t = typename Base_class::u_t ;  // input vector m*1
+    using z_t = typename Base_class::z_t ;  // measurement vector p*1
+    using A_t = typename Base_class::A_t ;  // system matrix n*n
+    using B_t = typename Base_class::B_t ;  // input matrix n*m
+    using H_t = typename Base_class::H_t ;  // measurement mapping p*n
+
+    using P_t = typename Base_class::P_t ;  // state covariance n*n
+    using Q_t = typename Base_class::Q_t ;  // process covariance n*n
+    using R_t = typename Base_class::R_t ;  // measurement covariance p*p
+
+    using K_t = typename Base_class::K_t ;  // kalman gain n*p
+    //}
+
+  public:
+    Lkf_stamped()
+      : Base_class()
+    {};
+    Lkf_stamped(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
+      : Base_class(A, B, H, P, Q, R)
+    {};
+
+  public:
+    ros::Time stamp;
+  };
 }  // namespace uav_localize
