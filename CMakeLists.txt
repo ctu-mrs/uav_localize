@@ -80,7 +80,7 @@ include_directories(include
   # ~/git/darknet_ocl/src
 )
 
-add_library(LocalizeSingle src/localize_single_nodelet.cpp)
+add_library(LocalizeSingle src/localize_single_nodelet.cpp src/Hypothesis.cpp)
 add_dependencies(LocalizeSingle
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
