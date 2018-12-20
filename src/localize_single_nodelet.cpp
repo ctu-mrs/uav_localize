@@ -654,6 +654,9 @@ namespace uav_localize
         case Measurement::source_t::rgb_tracking:
           ret = m_drmgr_ptr->config.rgb_trackings__max_gating_distance;
           break;
+        case Measurement::source_t::lkf_prediction:
+          ret = std::numeric_limits<double>::max(); // this should not happen...
+          break;
       }
 #pragma GCC diagnostic pop
       return ret;

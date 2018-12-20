@@ -67,6 +67,8 @@ namespace uav_localize
       lkf.P.setZero();
       lkf.P.block<3, 3>(0, 0) = init_meas.covariance;
       lkf.P.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
+      lkf.source = init_meas.source;
+      lkf.stamp = init_meas.stamp;
 
       m_lkfs.push_back(lkf);
     };
@@ -161,7 +163,7 @@ namespace uav_localize
     //}
 
     /* get_position_covariance_at() method //{ */
-    // TODO: Check that this is correct!
+    // TODO: change this to some kind of interpolation between LKF covariances with closest time stamps?
     inline Lkf::R_t get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const
     {
       Lkf::R_t ret = m_lkfs.back().P.block<3, 3>(0, 0);
@@ -212,7 +214,6 @@ namespace uav_localize
     }
     //}
 
-
     void update_lkf_history(const lkf_bfr_t::iterator& first_lkf_it, const meas_bfr_t::const_iterator& first_meas_it)
     {
       using lkf_it = lkf_bfr_t::iterator;
@@ -229,8 +230,7 @@ namespace uav_localize
             && (cur_lkf_it+1 == m_lkfs.end() || (*cur_meas_it).stamp < (cur_lkf_it+1)->stamp))
         {
           const Measurement& cur_meas = *cur_meas_it;
-          updating_lkf = predict(updating_lkf, cur_meas.stamp);
-          updating_lkf = correct(updating_lkf, cur_meas.position, cur_meas.covariance, cur_meas.stamp);
+          updating_lkf = correct_at_time(updating_lkf, cur_meas.position, cur_meas.covariance, cur_meas.stamp);
           updating_lkf.source = cur_meas.source;
           cur_meas_it++;
         }
@@ -245,13 +245,16 @@ namespace uav_localize
         cur_lkf_it++;
       }
 
-      /* // if the last LKF was updated with a new measurement, add it to the */ 
-      /* if (cur_lkf_it != m_lkfs.end()) */
-      /* { */
-        
-      /* } */
+      // if there are some more measurements after the last LKF time stamp, use them to generate new LKFs 
+      while (cur_meas_it != m_measurements.end())
+      {
+        const Measurement& cur_meas = *cur_meas_it;
+        updating_lkf = correct_at_time(updating_lkf, cur_meas.position, cur_meas.covariance, cur_meas.stamp);
+        updating_lkf.source = cur_meas.source;
+        m_lkfs.push_back(updating_lkf);
+        cur_meas_it++;
+      }
     }
-
 
     /* predict() method //{ */
     Lkf predict(Lkf lkf, const ros::Time& to_stamp, double pos_std, double vel_std)
@@ -273,9 +276,11 @@ namespace uav_localize
     }
     //}
 
-    /* correct() method //{ */
-    Lkf correct(Lkf lkf, const Lkf::z_t& meas_pos, const Lkf::R_t& meas_cov, const ros::Time& meas_stamp)
+    /* ccorrect_at_time() method //{ */
+    // predicts the LKF to the time of the measurement and then does the correction step using the measurement
+    Lkf correct_at_time(Lkf lkf, const Lkf::z_t& meas_pos, const Lkf::R_t& meas_cov, const ros::Time& meas_stamp)
     {
+      lkf = predict(lkf, meas_stamp);
       lkf.z = meas_pos;
       lkf.R = meas_cov;
       lkf.correction_step();
