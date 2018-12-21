@@ -31,6 +31,7 @@ namespace uav_localize
 
   void Hypothesis::correction_step(const Measurement& meas, [[maybe_unused]] double meas_loglikelihood)
   {
+    assert(!m_lkfs.empty() && !m_measurements.empty());
     // there must already be at least one lkf in the buffer (which should be true)
     const lkf_bfr_t::iterator lkf_prev_it = remove_const(find_prev(meas.stamp, m_lkfs), m_lkfs);
     const meas_bfr_t::iterator meas_next_it = remove_const(find_prev(meas.stamp, m_measurements), m_measurements)+1;
