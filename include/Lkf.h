@@ -89,7 +89,7 @@ namespace uav_localize
 
   private:
     /* covariance_predict() method //{ */
-    static inline P_t covariance_predict(const A_t& A, const P_t& P, const Q_t& Q)
+    static P_t covariance_predict(const A_t& A, const P_t& P, const Q_t& Q)
     {
       return A*P*A.transpose() + Q;
     }

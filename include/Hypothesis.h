@@ -9,7 +9,7 @@ namespace uav_localize
 {
   /* remove_cons() function //{ */
   template <typename T>
-  inline typename T::iterator remove_const(const typename T::const_iterator& it, T& cont)
+  typename T::iterator remove_const(const typename T::const_iterator& it, T& cont)
   {
     typename T::iterator ret = cont.begin();
     std::advance(ret, std::distance((typename T::const_iterator)ret, it));
@@ -26,21 +26,21 @@ namespace uav_localize
     static const int n_measurements = 3;
     using Lkf = uav_localize::Lkf_stamped<n_states, n_inputs, n_measurements>;
 
-    inline static Lkf::A_t create_A(double dt)
+    static Lkf::A_t create_A(double dt)
     {
       Lkf::A_t A;
       A << 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, dt, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1;
       return A;
     }
 
-    inline static Lkf::H_t create_H()
+    static Lkf::H_t create_H()
     {
       Lkf::H_t H;
       H << 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0;
       return H;
     }
 
-    inline Lkf::Q_t create_Q(double dt, double pos_std, double vel_std) const
+    Lkf::Q_t create_Q(double dt, double pos_std, double vel_std) const
     {
       Lkf::Q_t Q = Lkf::Q_t::Identity();
       Q.block<3, 3>(0, 0) *= dt * pos_std;
@@ -54,7 +54,7 @@ namespace uav_localize
 
   public:
     /* constructor //{ */
-    Hypothesis(const int id, const Measurement& init_meas, double init_vel_std, size_t hist_len);
+    Hypothesis(const int id, const Measurement& init_meas, double lkf_init_vel_std, double lkf_pos_std, double lkf_vel_std, size_t hist_len);
     //}
 
     const int32_t id;
@@ -72,39 +72,39 @@ namespace uav_localize
     //}
 
     /* get_n_corrections() method //{ */
-    inline int get_n_corrections(void) const;
+    int get_n_corrections(void) const;
     //}
 
     /* get_loglikelihood() method //{ */
-    inline double get_loglikelihood() const;
+    double get_loglikelihood() const;
     //}
 
     /* get_last_measurement() method //{ */
-    inline Measurement get_last_measurement(void) const;
+    Measurement get_last_measurement(void) const;
     //}
 
     /* get_position() method //{ */
-    inline Lkf::z_t get_position() const;
+    Lkf::z_t get_position() const;
     //}
 
     /* get_position_covariance() method //{ */
-    inline Lkf::R_t get_position_covariance() const;
+    Lkf::R_t get_position_covariance() const;
     //}
 
     /* get_position_at() method //{ */
-    inline Lkf::z_t get_position_at(const ros::Time& stamp) const;
+    Lkf::z_t get_position_at(const ros::Time& stamp) const;
     //}
 
     /* get_position_covariance_at() method //{ */
     // TODO: change this to some kind of interpolation between LKF covariances with closest time stamps?
-    inline Lkf::R_t get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const;
+    Lkf::R_t get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const;
     //}
 
   private:
     int64_t m_n_corrections;
     double m_loglikelihood;
-    Measurement m_last_measurement;
-    ros::Time m_last_lkf_update;
+    double m_lkf_pos_std;
+    double m_lkf_vel_std;
 
     lkf_bfr_t m_lkfs;
     meas_bfr_t m_measurements;
@@ -112,8 +112,8 @@ namespace uav_localize
   private:
     /* find_prev() method //{ */
     template <class T>
-    inline void slice_in_half(const typename T::const_iterator b_in, const typename T::const_iterator e_in,
-                              typename T::const_iterator& b_out, typename T::const_iterator& m_out, typename T::const_iterator& e_out)
+    void slice_in_half(const typename T::const_iterator b_in, const typename T::const_iterator e_in, typename T::const_iterator& b_out,
+                       typename T::const_iterator& m_out, typename T::const_iterator& e_out)
     {
       b_out = b_in;
       m_out = b_in + (e_in - b_in) / 2;
@@ -153,7 +153,7 @@ namespace uav_localize
     Lkf predict(Lkf lkf, const ros::Time& to_stamp);
     //}
 
-    /* ccorrect_at_time() method //{ */
+    /* correct_at_time() method //{ */
     // predicts the LKF to the time of the measurement and then does the correction step using the measurement
     Lkf correct_at_time(Lkf lkf, const Lkf::z_t& meas_pos, const Lkf::R_t& meas_cov, const ros::Time& meas_stamp);
     //}

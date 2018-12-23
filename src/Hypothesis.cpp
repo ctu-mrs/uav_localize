@@ -2,19 +2,16 @@
 
 namespace uav_localize
 {
-  Hypothesis::Hypothesis(const int id, const Measurement& init_meas, double init_vel_std, size_t hist_len)
-      : id(id), m_n_corrections(0), m_loglikelihood(0), m_lkfs(hist_len), m_measurements(hist_len)
+  Hypothesis::Hypothesis(const int id, const Measurement& init_meas, double lkf_init_vel_std, double lkf_pos_std, double lkf_vel_std, size_t hist_len)
+      : id(id), m_n_corrections(0), m_loglikelihood(0), m_lkf_pos_std(lkf_pos_std), m_lkf_vel_std(lkf_vel_std), m_lkfs(hist_len), m_measurements(hist_len)
   {
-    m_last_lkf_update = init_meas.stamp;
-    m_last_measurement = init_meas;
-
     // Initialize the LKF using the initialization measurement
     Lkf lkf(Lkf::A_t(), Lkf::B_t(), create_H(), Lkf::P_t(), Lkf::Q_t(), Lkf::R_t());
     lkf.x.block<3, 1>(0, 0) = init_meas.position;
     lkf.x.block<3, 1>(3, 0) = Eigen::Vector3d::Zero();
     lkf.P.setZero();
     lkf.P.block<3, 3>(0, 0) = init_meas.covariance;
-    lkf.P.block<3, 3>(3, 3) = init_vel_std * Eigen::Matrix3d::Identity();
+    lkf.P.block<3, 3>(3, 3) *= lkf_init_vel_std * Eigen::Matrix3d::Identity();
     lkf.source = init_meas.source;
     lkf.stamp = init_meas.stamp;
 
@@ -26,7 +23,6 @@ namespace uav_localize
   {
     Lkf n_lkf = predict(m_lkfs.back(), stamp, pos_std, vel_std);
     m_lkfs.push_back(n_lkf);
-    m_last_lkf_update = stamp;
   }
 
   void Hypothesis::correction_step(const Measurement& meas, [[maybe_unused]] double meas_loglikelihood)
@@ -34,11 +30,11 @@ namespace uav_localize
     assert(!m_lkfs.empty() && !m_measurements.empty());
     // there must already be at least one lkf in the buffer (which should be true)
     const lkf_bfr_t::iterator lkf_prev_it = remove_const(find_prev(meas.stamp, m_lkfs), m_lkfs);
-    const meas_bfr_t::iterator meas_next_it = remove_const(find_prev(meas.stamp, m_measurements), m_measurements)+1;
+    const meas_bfr_t::iterator meas_next_it = remove_const(find_prev(meas.stamp, m_measurements), m_measurements) + 1;
 
     // insert the new measurement into the measurement buffer (potentially kicking out the oldest measurement
     // at the beginning of the buffer)
-    const meas_bfr_t::const_iterator meas_new_it = m_measurements.insert(meas_next_it, meas); // TODO: find out why this is freezing the program!
+    const meas_bfr_t::const_iterator meas_new_it = m_measurements.insert(meas_next_it, meas);  // TODO: find out why this is freezing the program!
     // update the LKFs according to the new measurement history
     update_lkf_history(lkf_prev_it, meas_new_it);
 
@@ -57,41 +53,41 @@ namespace uav_localize
     return std::tuple(inn, inn_cov);
   }
 
-  inline int Hypothesis::get_n_corrections(void) const
+  int Hypothesis::get_n_corrections(void) const
   {
     return m_n_corrections;
   }
 
-  inline double Hypothesis::get_loglikelihood() const
+  double Hypothesis::get_loglikelihood() const
   {
     return m_loglikelihood;
   }
 
-  inline Measurement Hypothesis::get_last_measurement(void) const
+  Measurement Hypothesis::get_last_measurement(void) const
   {
-    return m_last_measurement;
+    return m_measurements.back();
   }
 
-  inline Hypothesis::Lkf::z_t Hypothesis::get_position() const
+  Hypothesis::Lkf::z_t Hypothesis::get_position() const
   {
     Lkf::z_t ret = m_lkfs.back().x.block<3, 1>(0, 0);
     return ret;
   }
 
-  inline Hypothesis::Lkf::R_t Hypothesis::get_position_covariance() const
+  Hypothesis::Lkf::R_t Hypothesis::get_position_covariance() const
   {
     Lkf::R_t ret = m_lkfs.back().P.block<3, 3>(0, 0);
     return ret;
   }
 
-  inline Hypothesis::Lkf::z_t Hypothesis::get_position_at(const ros::Time& stamp) const
+  Hypothesis::Lkf::z_t Hypothesis::get_position_at(const ros::Time& stamp) const
   {
     const Lkf::z_t pos = get_position();
     /* const double dt = */
     return pos;
   }
 
-  inline Hypothesis::Lkf::R_t Hypothesis::get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const
+  Hypothesis::Lkf::R_t Hypothesis::get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const
   {
     Lkf::R_t ret = m_lkfs.back().P.block<3, 3>(0, 0);
     return ret;
@@ -109,8 +105,7 @@ namespace uav_localize
     {
       Lkf& cur_lkf = *cur_lkf_it;
 
-      while (cur_meas_it != m_measurements.end()
-          && (cur_lkf_it+1 == m_lkfs.end() || (*cur_meas_it).stamp < (cur_lkf_it+1)->stamp))
+      while (cur_meas_it != m_measurements.end() && (cur_lkf_it + 1 == m_lkfs.end() || (*cur_meas_it).stamp < (cur_lkf_it + 1)->stamp))
       {
         const Measurement& cur_meas = *cur_meas_it;
         updating_lkf = correct_at_time(updating_lkf, cur_meas.position, cur_meas.covariance, cur_meas.stamp);
@@ -128,7 +123,7 @@ namespace uav_localize
       cur_lkf_it++;
     }
 
-    // if there are some more measurements after the last LKF time stamp, use them to generate new LKFs 
+    // if there are some more measurements after the last LKF time stamp, use them to generate new LKFs
     while (cur_meas_it != m_measurements.end())
     {
       const Measurement& cur_meas = *cur_meas_it;
@@ -141,17 +136,20 @@ namespace uav_localize
 
   Hypothesis::Lkf Hypothesis::predict(Lkf lkf, const ros::Time& to_stamp, double pos_std, double vel_std)
   {
-    const double dt = (to_stamp - lkf.stamp).toSec();
-    lkf.Q = create_Q(dt, pos_std, vel_std);
+    m_lkf_pos_std = pos_std;
+    m_lkf_vel_std = vel_std;
     return predict(lkf, to_stamp);
   }
 
   Hypothesis::Lkf Hypothesis::predict(Lkf lkf, const ros::Time& to_stamp)
   {
     const double dt = (to_stamp - lkf.stamp).toSec();
+    lkf.Q = create_Q(dt, m_lkf_pos_std, m_lkf_vel_std);
     lkf.A = create_A(dt);
     lkf.prediction_step();
     lkf.stamp = to_stamp;
+    if (lkf.P.array().isNaN().any())
+      ROS_ERROR("[%s]: P Matrix is NAN!!", ros::this_node::getName().c_str());
     return lkf;
   }
 

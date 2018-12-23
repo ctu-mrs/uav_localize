@@ -466,7 +466,7 @@ namespace uav_localize
         {
           if (meas_used.at(it) < 1 && measurements.at(it).reliable())
           {
-            Hypothesis new_hyp(++m_last_hyp_id, measurements.at(it), m_drmgr_ptr->config.init_vel_cov, 100);
+            Hypothesis new_hyp(++m_last_hyp_id, measurements.at(it), m_drmgr_ptr->config.init_vel_cov, m_drmgr_ptr->config.lkf_process_noise_pos, m_drmgr_ptr->config.lkf_process_noise_vel, 100);
             m_hyps.push_back(new_hyp);
             new_hyps++;
           }
@@ -597,18 +597,18 @@ namespace uav_localize
     //}
 
     /* get_msg_name() method overloads //{ */
-    inline static std::string get_msg_name([[maybe_unused]] const uav_detect::DetectionsConstPtr& msg)
+    static std::string get_msg_name([[maybe_unused]] const uav_detect::DetectionsConstPtr& msg)
     {
       return "uav_detect::Detections";
     }
-    inline static std::string get_msg_name([[maybe_unused]] const uav_track::TrackingsConstPtr& msg)
+    static std::string get_msg_name([[maybe_unused]] const uav_track::TrackingsConstPtr& msg)
     {
       return "uav_track::Trackings";
     }
     //}
 
     /* rotate_covariance() method //{ */
-    inline static Eigen::Matrix3d rotate_covariance(const Eigen::Matrix3d& covariance, const Eigen::Matrix3d& rotation)
+    static Eigen::Matrix3d rotate_covariance(const Eigen::Matrix3d& covariance, const Eigen::Matrix3d& rotation)
     {
       return rotation * covariance * rotation.transpose();  // rotate the covariance to point in direction of est. position
     }
