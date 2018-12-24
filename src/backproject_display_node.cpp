@@ -30,13 +30,14 @@ cv::Scalar get_color(int id)
 }
 
 struct Source {int id; std::string name;};
+static const std::vector<Source> possible_sources =
+{
+  {uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION, "depth detection"},
+  {uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING, "RGB tracking"},
+  {uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION, "LKF prediction"},
+};
 void draw_legend(cv::Mat& img)
 {
-  static const std::vector<Source> possible_sources =
-  {
-    {uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION, "depth detection"},
-    {uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING, "RGB tracking"}
-  };
   int offset = 1;
   cv::putText(img, "last source:", cv::Point(25, 30*offset++), FONT_HERSHEY_SIMPLEX, 0.8, Scalar(0, 0, 255), 2);
   for (auto source : possible_sources)
@@ -173,31 +174,54 @@ int main(int argc, char** argv)
           const bool is_main = hyp_msg.id == hyps_msg.main_hypothesis_id;
           if (show_all_hyps || is_main)
           {
-            geometry_msgs::Point point_transformed;
-            tf2::doTransform(hyp_msg.position, point_transformed, transform);
+            const size_t n_hist = hyp_msg.positions.size();
+            if (hyp_msg.position_sources.size() != n_hist)
+            {
+              ROS_ERROR("[%s]: Number of position sources is not equal to number of positions, skipping!", ros::this_node::getName().c_str());
+              continue;
+            }
 
+            cv::Point prev_pt2d;
             cv::Point3d pt3d;
-            pt3d.x = point_transformed.x;
-            pt3d.y = point_transformed.y;
-            pt3d.z = point_transformed.z;
-            const double dist = sqrt(pt3d.x*pt3d.x + pt3d.y*pt3d.y + pt3d.z*pt3d.z);
-            const cv::Point pt2d = camera_model.project3dToPixel(pt3d);
-
-            if (hyp_msg.last_correction_source > 1)
-              ROS_WARN("[%s]: INVALID HYPOTHESIS SOURCE: %u!", ros::this_node::getName().c_str(), hyp_msg.last_correction_source);
-
-            const cv::Scalar color = get_color(hyp_msg.last_correction_source);
-            const int thickness = is_main ? 3 : 1;
+            cv::Scalar color;
+            for (size_t it = 0; it < n_hist; it++)
+            {
+              geometry_msgs::Point point_transformed;
+              tf2::doTransform(hyp_msg.positions[it], point_transformed, transform);
             
-            cv::circle(img, pt2d, 40, color, thickness);
-            cv::line(img, cv::Point(pt2d.x - 15, pt2d.y), cv::Point(pt2d.x + 15, pt2d.y), Scalar(0, 0, 220));
-            cv::line(img, cv::Point(pt2d.x, pt2d.y - 15), cv::Point(pt2d.x, pt2d.y + 15), Scalar(0, 0, 220));
+              pt3d.x = point_transformed.x;
+              pt3d.y = point_transformed.y;
+              pt3d.z = point_transformed.z;
+              const cv::Point pt2d = camera_model.project3dToPixel(pt3d);
+            
+              if (hyp_msg.position_sources[it] > possible_sources.size())
+                ROS_WARN("[%s]: INVALID HYPOTHESIS SOURCE: %u!", ros::this_node::getName().c_str(), hyp_msg.position_sources[it]);
+            
+              color = get_color(hyp_msg.position_sources[it]);
+              /* const int thickness = is_main ? 2 : 1; */
+              const int thickness = 1;
+              const int size = is_main ? 8 : 3;
+            
+              cv::circle(img, pt2d, size, color, thickness);
+              if (it > 1)
+                cv::line(img, prev_pt2d, pt2d, color);
 
+              prev_pt2d = pt2d;
+            } // for (size_t it = 0; it < n_hist; it++)
+
+            if (is_main)
+            {
+              cv::circle(img, prev_pt2d, 30, color, 1);
+              cv::line(img, cv::Point(prev_pt2d.x - 15, prev_pt2d.y), cv::Point(prev_pt2d.x + 15, prev_pt2d.y), Scalar(0, 0, 220));
+              cv::line(img, cv::Point(prev_pt2d.x, prev_pt2d.y - 15), cv::Point(prev_pt2d.x, prev_pt2d.y + 15), Scalar(0, 0, 220));
+            }
+            
             // display info
             {
+              const double dist = sqrt(pt3d.x*pt3d.x + pt3d.y*pt3d.y + pt3d.z*pt3d.z);
               int li = 0;        // line iterator
               const int ls = 15; // line step
-              const cv::Point lo = pt2d + cv::Point(45, -45);
+              const cv::Point lo = prev_pt2d + cv::Point(45, -45);
               if (show_distance)
                 cv::putText(img, "distance: " + std::to_string(dist), lo+cv::Point(0, li++*ls), FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
               if (show_ID)

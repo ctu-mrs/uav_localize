@@ -746,14 +746,22 @@ namespace uav_localize
       for (const auto& hyp : hyps)
       {
         uav_localize::LocalizationHypothesis hyp_msg;
-        const Eigen::Vector3d position = hyp.get_position();
-        hyp_msg.position.x = position(0);
-        hyp_msg.position.y = position(1);
-        hyp_msg.position.z = position(2);
         hyp_msg.id = hyp.id;
         hyp_msg.n_corrections = hyp.get_n_corrections();
-        hyp_msg.last_correction_stamp = hyp.get_last_measurement().stamp;
-        hyp_msg.last_correction_source = hyp.get_last_measurement().source;
+        hyp_msg.last_correction_stamp = hyp.get_last_lkf().stamp;
+
+        const auto& lkfs = hyp.get_lkfs();
+        hyp_msg.positions.reserve(lkfs.size());
+        hyp_msg.position_sources.reserve(lkfs.size());
+        for (const auto& lkf : lkfs)
+        {
+          geometry_msgs::Point lkf_pt;
+          lkf_pt.x = lkf.x(0);
+          lkf_pt.y = lkf.x(1);
+          lkf_pt.z = lkf.x(2);
+          hyp_msg.positions.push_back(lkf_pt);
+          hyp_msg.position_sources.push_back(lkf.source);
+        }
 
         msg->hypotheses.push_back(hyp_msg);
       }

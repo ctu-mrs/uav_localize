@@ -83,6 +83,14 @@ namespace uav_localize
     Measurement get_last_measurement(void) const;
     //}
 
+    /* get_last_lkf() method //{ */
+    const Lkf& get_last_lkf(void) const;
+    //}
+
+    /* get_lkfs() method //{ */
+    const lkf_bfr_t& get_lkfs(void) const;
+    //}
+
     /* get_position() method //{ */
     Lkf::z_t get_position() const;
     //}
@@ -155,7 +163,7 @@ namespace uav_localize
 
     /* correct_at_time() method //{ */
     // predicts the LKF to the time of the measurement and then does the correction step using the measurement
-    Lkf correct_at_time(Lkf lkf, const Lkf::z_t& meas_pos, const Lkf::R_t& meas_cov, const ros::Time& meas_stamp);
+    Lkf correct_at_time(Lkf lkf, const Measurement& meas);
     //}
   };
 }  // namespace uav_localize
