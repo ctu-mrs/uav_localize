@@ -8,7 +8,8 @@ windows:
   - gazebo:
       layout: even-vertical
       panes:
-        - export DISPLAY=:1; roslaunch uav_detect simulation.launch
+        # - export DISPLAY=:1; roslaunch uav_detect simulation.launch
+        - roslaunch uav_localize simulation.launch
         # - roslaunch simulation simulation.launch
   - spawn:
       layout: even-vertical
@@ -18,8 +19,8 @@ windows:
   - odometry:
       layout: even-vertical
       panes:
-        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_mav_manager simulation.launch
-        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_mav_manager simulation.launch
+        - export UAV_NAME=uav1; waitForOdometry; roslaunch mrs_mav_manager simulation_f550_gps.launch
+        - export UAV_NAME=uav2; waitForOdometry; roslaunch mrs_mav_manager simulation_f550_gps.launch
   - takeoff:
       layout: even-vertical
       panes:
