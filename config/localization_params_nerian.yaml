@@ -1,0 +1,75 @@
+!!python/object/new:dynamic_reconfigure.encoding.Config
+dictitems:
+  depth_detections__max_gating_distance: 1.0
+  depth_detections__xy_covariance_coeff: 0.3
+  depth_detections__z_covariance_coeff: 0.3
+  groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+    dictitems:
+      groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+        dictitems:
+          UAV_localization_parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+            dictitems:
+              groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+                dictitems:
+                  Depth_detection_measurements: !!python/object/new:dynamic_reconfigure.encoding.Config
+                    dictitems:
+                      depth_detections__max_gating_distance: 1.0
+                      depth_detections__xy_covariance_coeff: 0.3
+                      depth_detections__z_covariance_coeff: 0.3
+                      groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+                        state: []
+                      id: 2
+                      name: Depth_detection_measurements
+                      parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+                        state: []
+                      parent: 1
+                      state: true
+                      type: ''
+                    state: []
+                  RGB_tracking_measurements: !!python/object/new:dynamic_reconfigure.encoding.Config
+                    dictitems:
+                      groups: !!python/object/new:dynamic_reconfigure.encoding.Config
+                        state: []
+                      id: 3
+                      name: RGB_tracking_measurements
+                      parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+                        state: []
+                      parent: 1
+                      rgb_trackings__max_gating_distance: 2.5
+                      rgb_trackings__xy_covariance_coeff: 0.6
+                      rgb_trackings__z_covariance_coeff: 1.0
+                      state: true
+                      type: ''
+                    state: []
+                state: []
+              id: 1
+              init_vel_cov: 4.0
+              lkf_process_noise_pos: 1.0
+              lkf_process_noise_vel: 3.0
+              max_hyp_uncertainty: 20.0
+              min_corrs_to_consider: 20
+              name: UAV_localization_parameters
+              parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+                state: []
+              parent: 0
+              state: true
+              type: ''
+            state: []
+        state: []
+      id: 0
+      name: Default
+      parameters: !!python/object/new:dynamic_reconfigure.encoding.Config
+        state: []
+      parent: 0
+      state: true
+      type: ''
+    state: []
+  init_vel_cov: 4.0
+  lkf_process_noise_pos: 1.0
+  lkf_process_noise_vel: 3.0
+  max_hyp_uncertainty: 20.0
+  min_corrs_to_consider: 20
+  rgb_trackings__max_gating_distance: 2.5
+  rgb_trackings__xy_covariance_coeff: 0.6
+  rgb_trackings__z_covariance_coeff: 1.0
+state: []
