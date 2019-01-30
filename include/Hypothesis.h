@@ -99,13 +99,16 @@ namespace uav_localize
     Lkf::R_t get_position_covariance() const;
     //}
 
-    /* get_position_at() method //{ */
-    Lkf::z_t get_position_at(const ros::Time& stamp) const;
+    /* /1* get_position_at() method //{ *1/ */
+    /* Lkf::z_t get_position_at(const ros::Time& stamp) const; */
+    /* //} */
+
+    /* get_position_and_covariance_at() method //{ */
+    std::tuple<Hypothesis::Lkf::z_t, Hypothesis::Lkf::R_t> get_position_and_covariance_at(const ros::Time& stamp) const;
     //}
 
-    /* get_position_covariance_at() method //{ */
-    // TODO: change this to some kind of interpolation between LKF covariances with closest time stamps?
-    Lkf::R_t get_position_covariance_at([[maybe_unused]] const ros::Time& stamp) const;
+    /* predict_to() method overloads //{ */
+    void predict_to(const ros::Time& to_stamp, double pos_std, double vel_std);
     //}
 
   private:
@@ -115,13 +118,13 @@ namespace uav_localize
     double m_lkf_vel_std;
 
     lkf_bfr_t m_lkfs;
-    meas_bfr_t m_measurements;
+    Lkf m_latest_lkf;
 
   private:
     /* find_prev() method //{ */
     template <class T>
     void slice_in_half(const typename T::const_iterator b_in, const typename T::const_iterator e_in, typename T::const_iterator& b_out,
-                       typename T::const_iterator& m_out, typename T::const_iterator& e_out)
+                       typename T::const_iterator& m_out, typename T::const_iterator& e_out) const
     {
       b_out = b_in;
       m_out = b_in + (e_in - b_in) / 2;
@@ -129,7 +132,7 @@ namespace uav_localize
     }
 
     template <class T>
-    const typename T::const_iterator find_prev(const ros::Time& stamp, const T& bfr)
+    const typename T::const_iterator find_prev(const ros::Time& stamp, const T& bfr) const
     {
       using it_t = typename T::const_iterator;
       it_t b = std::begin(bfr);
@@ -151,14 +154,14 @@ namespace uav_localize
     }
     //}
 
-    void update_lkf_history(const lkf_bfr_t::iterator& first_lkf_it, const meas_bfr_t::const_iterator& first_meas_it);
+    void update_lkf_history(const lkf_bfr_t::iterator& lkf_start_it);
 
     /* predict() method //{ */
     Lkf predict(Lkf lkf, const ros::Time& to_stamp, double pos_std, double vel_std);
     //}
 
     /* predict() method //{ */
-    Lkf predict(Lkf lkf, const ros::Time& to_stamp);
+    Lkf predict(Lkf lkf, const ros::Time& to_stamp) const;
     //}
 
     /* correct_at_time() method //{ */

@@ -140,16 +140,16 @@ namespace uav_localize
     Lkf_stamped()
       : Base_class()
     {
-      source = Measurement::source_t::lkf_prediction;
+      correction_meas.source = Measurement::source_t::lkf_prediction;
     };
     Lkf_stamped(const A_t& A, const B_t& B, const H_t& H, const P_t& P, const Q_t& Q, const R_t& R)
       : Base_class(A, B, H, P, Q, R)
     {
-      source = Measurement::source_t::lkf_prediction;
+      correction_meas.source = Measurement::source_t::lkf_prediction;
     };
 
   public:
     ros::Time stamp;
-    Measurement::source_t source;
+    Measurement correction_meas;
   };
 }  // namespace uav_localize

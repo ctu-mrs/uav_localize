@@ -109,7 +109,7 @@ int main(int argc, char** argv)
   ROS_INFO("detection_timeout: %f", detection_timeout);
 
   mrs_lib::SubscribeMgr smgr(nh, "backprojection_node");
-  const bool subs_time_consistent = true;
+  const bool subs_time_consistent = false;
   sh_hyps = smgr.create_handler_threadsafe<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
   sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr, subs_time_consistent>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
   sh_cinfo = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));

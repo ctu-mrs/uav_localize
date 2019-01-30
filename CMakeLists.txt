@@ -38,6 +38,7 @@ ENDIF()
 
 set(CMAKE_CXX_FLAGS "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN -fno-inline-functions")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN -fno-inline-functions")
+# set(CMAKE_CXX_FLAGS_RELEASE "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN -fno-inline-functions")
 set(CMAKE_CXX_FLAGS_RELEASE "-Werror -O3")
 
 add_compile_options("-std=c++17" "-Wall" "-Wextra")

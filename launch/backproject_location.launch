@@ -21,8 +21,8 @@
     <node pkg="uav_localize" name="backproject_location" type="backproject_display_node" output="screen" launch-prefix="$(arg launch_prefix)" >
 
       <param name="detection_timeout" value="0.2" />
-      <remap from="~image_rect" to="$(arg image_topic)" />
-      <remap from="~camera_info" to="$(arg cinfo_topic)" />
+      <remap from="~image_rect" to="/nerian_stereo/left_image" />
+      <remap from="~camera_info" to="/republish_camera_info/depth_camera_info" />
       <remap from="~dbg_hypotheses" to="$(arg dbgloc_topic)" />
       <remap from="~detections" to="$(arg dets_topic)" />
 

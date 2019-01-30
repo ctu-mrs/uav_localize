@@ -30,7 +30,7 @@
     
       <remap from="~detections" to="/$(arg uav_name)/uav_detection/detections" />
       <remap from="~trackings" to="/$(arg uav_name)/uav_tracking/trackings" />
-      <remap from="~camera_info" to="$(arg cinfo_topic)" />
+      <remap from="~camera_info" to="/republish_camera_info/depth_camera_info" />
 
     </node>
   

@@ -84,14 +84,15 @@ namespace uav_localize
       m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer);
       // Subscribers
       mrs_lib::SubscribeMgr smgr(nh, m_node_name);
-      const bool subs_time_consistent = true;
+      const bool subs_time_consistent = false;
       m_sh_detections_ptr = smgr.create_handler_threadsafe<uav_detect::DetectionsConstPtr, subs_time_consistent>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       m_sh_trackings_ptr = smgr.create_handler_threadsafe<uav_track::TrackingsConstPtr, subs_time_consistent>("trackings", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       m_sh_cinfo_ptr = smgr.create_handler_threadsafe<sensor_msgs::CameraInfoConstPtr, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
       m_pub_dgb_hypotheses = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 10);
-      m_pub_dgb_pcl = nh.advertise<sensor_msgs::PointCloud>("dbg_pointcloud", 10);
+      m_pub_dgb_pcl_hyps = nh.advertise<sensor_msgs::PointCloud>("dbg_hypotheses_pcl", 10);
+      m_pub_dgb_pcl_meas = nh.advertise<sensor_msgs::PointCloud>("dbg_measurements_pcl", 10);
       //}
 
       /* Initialize other variables //{ */
@@ -104,7 +105,7 @@ namespace uav_localize
       //}
 
       /* Initialize timers //{ */
-      m_lkf_update_loop_timer = nh.createTimer(ros::Rate(update_loop_rate), &LocalizeSingle::lkf_update_loop, this);
+      /* m_lkf_update_loop_timer = nh.createTimer(ros::Rate(update_loop_rate), &LocalizeSingle::lkf_update_loop, this); */
       m_process_loop_timer = nh.createTimer(ros::Rate(process_loop_rate), &LocalizeSingle::process_loop, this);
       m_publish_loop_timer = nh.createTimer(ros::Rate(publish_loop_rate), &LocalizeSingle::publish_loop, this);
       m_info_loop_timer = nh.createTimer(ros::Rate(info_loop_rate), &LocalizeSingle::info_loop, this);
@@ -140,6 +141,14 @@ namespace uav_localize
               std::lock_guard<std::mutex> lck(m_hyps_mtx);
               update_hyps(measurements, m_hyps);
             }
+
+            /* Publish debug pointcloud message of measurements //{ */
+            if (m_pub_dgb_pcl_meas.getNumSubscribers() > 0)
+            {
+              sensor_msgs::PointCloudConstPtr pcl_msg = create_pcl_message(measurements, last_detections_msg->header.stamp);
+              m_pub_dgb_pcl_meas.publish(pcl_msg);
+            }
+            //}
           }
           //}
 
@@ -191,6 +200,7 @@ namespace uav_localize
       Hypothesis const* most_certain_hyp = nullptr;
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
+        predict_to(m_hyps, stamp);
         kick_out_uncertain_hyps(m_hyps);
         most_certain_hyp = find_most_certain_hyp(m_hyps);
       }
@@ -215,12 +225,12 @@ namespace uav_localize
       //}
 
       /* Publish debug pointcloud message of hypotheses //{ */
-      if (m_pub_dgb_pcl.getNumSubscribers() > 0)
+      if (m_pub_dgb_pcl_hyps.getNumSubscribers() > 0)
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         int hyp_id = most_certain_hyp == nullptr ? -1 : most_certain_hyp->id;
         sensor_msgs::PointCloudConstPtr pcl_msg = create_pcl_message(m_hyps, hyp_id, stamp);
-        m_pub_dgb_pcl.publish(pcl_msg);
+        m_pub_dgb_pcl_hyps.publish(pcl_msg);
       }
       //}
       
@@ -236,17 +246,17 @@ namespace uav_localize
     }
     //}
 
-    /* lkf_update_loop() method //{ */
-    void lkf_update_loop(const ros::TimerEvent& evt)
-    {
-      // Iterate LKFs in all hypotheses
-      std::lock_guard<std::mutex> lck(m_hyps_mtx);
-      for (auto& hyp : m_hyps)
-      {
-        hyp.prediction_step(evt.current_real, m_drmgr_ptr->config.lkf_process_noise_pos,  m_drmgr_ptr->config.lkf_process_noise_vel);
-      }
-    }
-    //}
+    /* /1* lkf_update_loop() method //{ *1/ */
+    /* void lkf_update_loop(const ros::TimerEvent& evt) */
+    /* { */
+    /*   // Iterate LKFs in all hypotheses */
+    /*   std::lock_guard<std::mutex> lck(m_hyps_mtx); */
+    /*   for (auto& hyp : m_hyps) */
+    /*   { */
+    /*     hyp.prediction_step(evt.current_real, m_drmgr_ptr->config.lkf_process_noise_pos,  m_drmgr_ptr->config.lkf_process_noise_vel); */
+    /*   } */
+    /* } */
+    /* //} */
 
     /* info_loop() method //{ */
     void info_loop([[maybe_unused]] const ros::TimerEvent& evt)
@@ -302,8 +312,9 @@ namespace uav_localize
     mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfoConstPtr> m_sh_cinfo_ptr;
     ros::Publisher m_pub_localized_uav;
     ros::Publisher m_pub_dgb_hypotheses;
-    ros::Publisher m_pub_dgb_pcl;
-    ros::Timer m_lkf_update_loop_timer;
+    ros::Publisher m_pub_dgb_pcl_hyps;
+    ros::Publisher m_pub_dgb_pcl_meas;
+    /* ros::Timer m_lkf_update_loop_timer; */
     ros::Timer m_process_loop_timer;
     ros::Timer m_publish_loop_timer;
     ros::Timer m_info_loop_timer;
@@ -350,7 +361,7 @@ namespace uav_localize
     }
     //}
 
-    /* position_from_detection() method overloads //{ */
+    /* covariance_from_detection() method overloads //{ */
     Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const uav_detect::Detection& det, const Eigen::Vector3d& position)
     {
       Eigen::Matrix3d ret;
@@ -479,9 +490,23 @@ namespace uav_localize
     }
     //}
 
+    /* predict_to() method //{ */
+    // this method predicts the hypotheses to the specified time stamp
+    void predict_to(std::list<Hypothesis>& hyps, ros::Time stamp)
+    {
+      const double lkf_process_noise_pos = m_drmgr_ptr->config.lkf_process_noise_pos ;
+      const double lkf_process_noise_vel = m_drmgr_ptr->config.lkf_process_noise_vel ;
+      for (auto& hyp : hyps)
+      {
+        hyp.predict_to(stamp, lkf_process_noise_pos, lkf_process_noise_vel);
+      }
+    }
+    //}
+
     /* kick_out_uncertain_hyps() method //{ */
     void kick_out_uncertain_hyps(std::list<Hypothesis>& hyps) const
     {
+      int kicked_out_hyps = 0;
       for (list<Hypothesis>::iterator it = std::begin(hyps); it != std::end(hyps); it++)
       {
         auto& hyp = *it;
@@ -492,9 +517,10 @@ namespace uav_localize
         {
           it = hyps.erase(it);
           it--;
-          /* kicked_out_hyps++; */
+          kicked_out_hyps++;
         }
       }
+      NODELET_DEBUG("[LocalizeSingle]: Kicked out %d new hypotheses for total of %lu", kicked_out_hyps , m_hyps.size());
     }
     //}
 
@@ -625,13 +651,13 @@ namespace uav_localize
 
     /* calc_hyp_meas_loglikelihood() method //{ */
     template <unsigned num_dimensions>
-    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas, const double mahalanobis_distance2)
+    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas, [[maybe_unused]] const double mahalanobis_distance2)
     {
-      /* const auto [inn, inn_cov] = hyp.calc_innovation(meas); */
-      const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance_at(meas.stamp);
+      const auto [inn, inn_cov] = hyp.calc_innovation(meas);
+      /* const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance_at(meas.stamp); */
       static const double dylog2pi = num_dimensions*log(2*M_PI);
-      /* const double a = inn.transpose() * inn_cov.inverse() * inn; */
-      const double a = mahalanobis_distance2;
+      const double a = inn.transpose() * inn_cov.inverse() * inn;
+      /* const double a = mahalanobis_distance2; */
       const double b = log(inn_cov.determinant());
       return - (a + b + dylog2pi)/2.0;
     }
@@ -680,7 +706,8 @@ namespace uav_localize
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
-        const double dist2 = mahalanobis_distance2(meas.position, hyp.get_position_at(meas.stamp), hyp.get_position_covariance());
+        const auto [pos, pos_cov] = hyp.get_position_and_covariance_at(meas.stamp);
+        const double dist2 = mahalanobis_distance2(meas.position, pos, pos_cov);
         const double max_dist = max_gating_distance(meas.source);
         if (dist2 < max_dist*max_dist)
         {
@@ -733,7 +760,7 @@ namespace uav_localize
     }
     //}
 
-    /* to_dbg_message() method //{ */
+    /* create_dbg_message() method //{ */
     uav_localize::LocalizationHypothesesConstPtr create_dbg_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
       uav_localize::LocalizationHypothesesPtr msg = boost::make_shared<uav_localize::LocalizationHypotheses>();
@@ -760,7 +787,7 @@ namespace uav_localize
           lkf_pt.y = lkf.x(1);
           lkf_pt.z = lkf.x(2);
           hyp_msg.positions.push_back(lkf_pt);
-          hyp_msg.position_sources.push_back(lkf.source);
+          hyp_msg.position_sources.push_back(lkf.correction_meas.source);
         }
 
         msg->hypotheses.push_back(hyp_msg);
@@ -770,7 +797,7 @@ namespace uav_localize
     }
     //}
 
-    /* to_pcl_message() method //{ */
+    /* create_pcl_message() method //{ */
     sensor_msgs::PointCloudConstPtr create_pcl_message(const std::list<Hypothesis>& hyps, int32_t main_hyp_id, const ros::Time& stamp)
     {
       sensor_msgs::PointCloudPtr msg = boost::make_shared<sensor_msgs::PointCloud>();
@@ -821,6 +848,43 @@ namespace uav_localize
       msg->channels.push_back(ch_n_corrections);
       msg->channels.push_back(ch_last_correction_delay);
       msg->channels.push_back(ch_last_correction_source);
+      return msg;
+    }
+    //}
+
+    /* create_pcl_message() method //{ */
+    sensor_msgs::PointCloudConstPtr create_pcl_message(const std::vector<Measurement>& measurements, const ros::Time& stamp)
+    {
+      sensor_msgs::PointCloudPtr msg = boost::make_shared<sensor_msgs::PointCloud>();
+
+      ros::Time cur_t = ros::Time::now();
+      msg->header.stamp = stamp;
+      msg->header.frame_id = m_world_frame;
+      msg->points.reserve(measurements.size());
+
+      sensor_msgs::ChannelFloat32 ch_source;
+      ch_source.name = "source";
+      ch_source.values.reserve(measurements.size());
+
+      sensor_msgs::ChannelFloat32 ch_delay;
+      ch_delay.values.reserve(measurements.size());
+
+      for (const auto& meas : measurements)
+      {
+        geometry_msgs::Point32 pt;
+        const Eigen::Vector3d position = meas.position;
+        pt.x = position(0);
+        pt.y = position(1);
+        pt.z = position(2);
+        msg->points.push_back(pt);
+
+        ch_source.values.push_back(meas.source);
+        float delay = (cur_t - meas.stamp).toSec();
+        ch_delay.values.push_back(delay);
+      }
+
+      msg->channels.push_back(ch_source);
+      msg->channels.push_back(ch_delay);
       return msg;
     }
     //}
