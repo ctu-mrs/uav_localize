@@ -8,6 +8,7 @@
 
   <arg name="simulation" default="$(optenv SIMULATION false)" />
   <arg name="frombag" default="$(optenv FROMBAG false)" />
+  <arg name="source_live" value="$(eval not ( simulation or frombag ))"/>
 
   <arg name="manager" default="localization_nodelet_manager" />
 
@@ -28,7 +29,7 @@
   </group>
     
   <!-- Nerian stereo camera -->
-  <include file="$(find nerian_driver)/launch/nerian_driver.launch" unless="$(arg simulation)">
+  <include file="$(find nerian_driver)/launch/nerian_driver.launch" if="$(arg source_live)">
     <arg name="manager"   value="$(arg manager)" />
     <arg name="frame_id" value="$(arg nerian_frame_id)" />
   </include>
@@ -49,11 +50,11 @@
   </include>
 
   <!-- UAV tracking from rgb image -->
-  <include file="$(find uav_track)/launch/uav_track.launch">
-    <arg name="standalone" value="false" />
-    <arg name="manager"    value="$(arg manager)" />
-    <arg name="simulation" value="$(arg simulation)" />
-  </include>
+  <!-- <include file="$(find uav_track)/launch/uav_track.launch"> -->
+  <!--   <arg name="standalone" value="false" /> -->
+  <!--   <arg name="manager"    value="$(arg manager)" /> -->
+  <!--   <arg name="simulation" value="$(arg simulation)" /> -->
+  <!-- </include> -->
 
   <!-- single UAV localization -->
   <include file="$(find uav_localize)/launch/localize_single.launch">

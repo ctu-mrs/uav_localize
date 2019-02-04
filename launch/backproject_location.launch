@@ -7,9 +7,9 @@
   <arg     if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args"/>
 
   <arg name="simulation" default="$(optenv SIMULATION false)" />
-  <arg unless="$(arg simulation)" name="image_topic" value="/$(arg uav_name)/rs_d435/color/image_rect_color"/>
+  <arg unless="$(arg simulation)" name="image_topic" value="/$(arg uav_name)/nerian_driver/left_image"/>
   <arg     if="$(arg simulation)" name="image_topic" value="/$(arg uav_name)/realsense/camera/color/image_raw"/>
-  <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/rs_d435/color/camera_info"/>
+  <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/nerian_driver/depth_camera_info"/>
   <arg     if="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/realsense/camera/color/camera_info"/>
   <arg unless="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_hypotheses"/>
   <arg     if="$(arg simulation)" name="dbgloc_topic" value="/$(arg uav_name)/uav_localization/dbg_hypotheses"/>
@@ -21,8 +21,8 @@
     <node pkg="uav_localize" name="backproject_location" type="backproject_display_node" output="screen" launch-prefix="$(arg launch_prefix)" >
 
       <param name="detection_timeout" value="0.2" />
-      <remap from="~image_rect" to="/nerian_stereo/left_image" />
-      <remap from="~camera_info" to="/republish_camera_info/depth_camera_info" />
+      <remap from="~image_rect" to="$(arg image_topic)" />
+      <remap from="~camera_info" to="$(arg cinfo_topic)" />
       <remap from="~dbg_hypotheses" to="$(arg dbgloc_topic)" />
       <remap from="~detections" to="$(arg dets_topic)" />
 
