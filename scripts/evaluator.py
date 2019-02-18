@@ -103,10 +103,12 @@ def rotation(theta):
 
    return np.dot(Rx, np.dot(Ry, Rz)) 
 
-def transform_gt(gt_pos, params):
+def transform_gt(gt_pos, params, inverse=False):
     angles = params[0:3]
     shift = params[3:6]
     R = rotation(angles)
+    if inverse:
+        R = R.transpose()
     # shift = np.array([20, -20, -1]).transpose()
     rotated = np.dot(gt_pos, R)
     rotated += shift
@@ -132,6 +134,8 @@ def calc_errors(positions1, times1, positions2, times2):
         closest_it = find_closest(time1, times2)
         if abs(times2[closest_it] - time1) > max_dt:
             continue
+        # if positions2[closest_it, 1] > 5:
+        #     continue
         errors[it] = np.linalg.norm(positions1[it, :] - positions2[closest_it, :])
     return errors
 
@@ -226,12 +230,14 @@ def main():
     gt_out_fname = rospy.get_param('~ground_truth_out_fname')
 
     # msgs = load_pickle(in_fname)
-    FP_error = 7.0 # meters
+    FP_error = 666.0 # meters
 
     if os.path.isfile(loc_out_fname) and os.path.isfile(gt_out_fname):
         rospy.loginfo("Files {:s} and {:s} found, loading them".format(loc_out_fname, gt_out_fname))
         loc_positions, loc_times = load_csv_data(loc_out_fname)
         min_positions, gt_times = load_csv_data(gt_out_fname)
+        # loc_positions = transform_gt(loc_positions, [0, 0, -0.52, 0, 0, 0])
+        # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :]
     else:
         rospy.loginfo("Loading data from rosbags {:s} and {:s}".format(loc_bag_fname, gt_bag_fname))
         # if msgs is None:
@@ -257,15 +263,17 @@ def main():
         loc_times = msgs_to_times(loc_msgs)
         gt_positions = msgs_to_pos(gt_msgs)
         gt_times = msgs_to_times(gt_msgs)
+        # loc_positions = transform_gt(loc_positions, [1.57, 3.14, 1.57, 0, 0, 0], inverse=True)
         rot_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
         rot_positions = rot_positions - rot_positions[0, :] + loc_positions[0, :]
         # Find the transformed positions of GT which minimize RMSE with the localization
-        min_positions = find_min_positions(rot_positions, gt_times, loc_positions, loc_times, FP_error)
+        # min_positions = find_min_positions(rot_positions, gt_times, loc_positions, loc_times, FP_error)
+        min_positions = rot_positions
 
         put_to_file(loc_positions, loc_times, loc_out_fname)
         put_to_file(min_positions, gt_times, gt_out_fname)
 
-    rospy.loginfo("Done loading positions")
+    # rospy.loginfo("Done loading positions")
 
     TPs, TNs, FPs, FNs = calc_statistics(min_positions, gt_times, loc_positions, loc_times, FP_error)
     rospy.loginfo("TPs, TNs, FPs, FNs: {:d}, {:d}, {:d}, {:d}".format(TPs, TNs, FPs, FNs))
@@ -274,13 +282,14 @@ def main():
     recall = TPs/float(TPs + FNs)
     rospy.loginfo("precision, recall: {:f}, {:f}".format(precision, recall))
 
-    error = np.array(calc_errors(min_positions, gt_times, loc_positions, loc_times), dtype=float)
+    # error = np.array(calc_errors(min_positions, gt_times, loc_positions, loc_times), dtype=float)
     # error_over_distance = error/min_positions[:, 2]
     # dist = np.linspace(np.min(min_positions[:, 2]), np.max(min_positions[:, 2]), len(error))
     # plt.plot(dist, error)
     # plt.show()
 
-    TP_mask = error < FP_error
+    # TP_mask = error < FP_error
+    TP_mask = np.ones(min_positions.shape[0], dtype=bool)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.plot(loc_positions[:, 0], loc_positions[:, 1], loc_positions[:, 2], 'g.')
@@ -296,6 +305,8 @@ def main():
     ax.set_ylabel('y (m)')
     ax.set_zlabel('z (m)')
     ax.set_aspect('equal')
+    plt.xlim([-10, 60])
+    plt.ylim([-20, 20])
     plt.show()
 
 if __name__ == '__main__':
