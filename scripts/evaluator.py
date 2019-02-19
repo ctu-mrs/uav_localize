@@ -134,9 +134,10 @@ def calc_errors(positions1, times1, positions2, times2):
         closest_it = find_closest(time1, times2)
         if abs(times2[closest_it] - time1) > max_dt:
             continue
-        # if positions2[closest_it, 1] > 5:
-        #     continue
-        errors[it] = np.linalg.norm(positions1[it, :] - positions2[closest_it, :])
+        if positions2[closest_it, 1] > 5:
+            errors[it] = -1
+        else:
+            errors[it] = np.linalg.norm(positions1[it, :] - positions2[closest_it, :])
     return errors
 
 def calc_error(positions1, times1, positions2, times2, FP_error):
@@ -206,14 +207,14 @@ def calc_statistics(positions1, times1, positions2, times2, FP_error):
     for err in errors:
         if err is None:
             FNs += 1
-        elif err > FP_error:
+        elif err > FP_error or err < 0:
             FNs += 1
             FPs += 1
         else:
             TPs += 1
 
     errors = np.array(errors, dtype=float)
-    nn_errors = errors[~np.isnan(errors)]
+    nn_errors = errors[np.logical_and(~np.isnan(errors), errors >= 0)]
     rospy.loginfo("Max. error: {:f}".format(np.max(nn_errors)))
     rospy.loginfo("Mean error: {:f}, std.: {:f}".format(np.mean(nn_errors), np.std(nn_errors)))
     return (TPs, TNs, FPs, FNs)
@@ -232,35 +233,44 @@ def main():
     # msgs = load_pickle(in_fname)
     FP_error = 666.0 # meters
 
-    if os.path.isfile(loc_out_fname) and os.path.isfile(gt_out_fname):
-        rospy.loginfo("Files {:s} and {:s} found, loading them".format(loc_out_fname, gt_out_fname))
+    rosbag_skip_time = 20
+    rosbag_skip_time_end = 60
+    if os.path.isfile(loc_out_fname):
+        rospy.loginfo("File {:s} found, loading it".format(loc_out_fname))
         loc_positions, loc_times = load_csv_data(loc_out_fname)
+        loc_frombag = False
+    else:
+        rospy.loginfo("Loading data from rosbag {:s}".format(loc_bag_fname))
+        # if msgs is None:
+        # rospy.loginfo("Input file not valid, loading from rosbag")
+        loc_msgs = load_rosbag_msgs(loc_bag_fname, loc_topic_name, skip_time=rosbag_skip_time, skip_time_end=rosbag_skip_time_end)
+        if loc_msgs is None:
+            exit(1)
+
+        loc_positions = msgs_to_pos(loc_msgs)
+        loc_times = msgs_to_times(loc_msgs)
+        loc_frombag = True
+
+    rospy.loginfo("Loaded {:d} localization positions".format(len(loc_positions)))
+
+    if os.path.isfile(gt_out_fname):
+        rospy.loginfo("File {:s} found, loading it".format(gt_out_fname))
         min_positions, gt_times = load_csv_data(gt_out_fname)
         # loc_positions = transform_gt(loc_positions, [0, 0, -0.52, 0, 0, 0])
         # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :]
+        gt_frombag = False
     else:
-        rospy.loginfo("Loading data from rosbags {:s} and {:s}".format(loc_bag_fname, gt_bag_fname))
-        # if msgs is None:
-        skip_time = 20
-        skip_time_end = 60
-        # rospy.loginfo("Input file not valid, loading from rosbag")
-        loc_msgs = load_rosbag_msgs(loc_bag_fname, loc_topic_name, skip_time=skip_time, skip_time_end=skip_time_end)
-        gt_msgs = load_rosbag_msgs(gt_bag_fname, gt_topic_name, skip_time=skip_time, skip_time_end=skip_time_end)
+        gt_msgs = load_rosbag_msgs(gt_bag_fname, gt_topic_name, skip_time=rosbag_skip_time, skip_time_end=rosbag_skip_time_end)
         # else:
         #     rospy.loginfo("Input file loaded, processing")
-        if loc_msgs is None or gt_msgs is None:
+        if gt_msgs is None:
             exit(1)
 
-        start_time = loc_msgs[0].header.stamp
-        end_time = loc_msgs[-1].header.stamp
-        gt_msgs = cut_from(gt_msgs, start_time)
-        gt_msgs = cut_to(gt_msgs, end_time)
+        start_time = loc_times[0]
+        end_time = loc_times[-1]
+        gt_msgs = cut_from(gt_msgs, rospy.Time.from_sec(start_time))
+        gt_msgs = cut_to(gt_msgs, rospy.Time.from_sec(end_time))
 
-        rospy.loginfo("Loaded {:d} localization messages".format(len(loc_msgs)))
-        rospy.loginfo("Loaded {:d} ground truth messages".format(len(gt_msgs)))
-    
-        loc_positions = msgs_to_pos(loc_msgs)
-        loc_times = msgs_to_times(loc_msgs)
         gt_positions = msgs_to_pos(gt_msgs)
         gt_times = msgs_to_times(gt_msgs)
         # loc_positions = transform_gt(loc_positions, [1.57, 3.14, 1.57, 0, 0, 0], inverse=True)
@@ -269,11 +279,18 @@ def main():
         # Find the transformed positions of GT which minimize RMSE with the localization
         # min_positions = find_min_positions(rot_positions, gt_times, loc_positions, loc_times, FP_error)
         min_positions = rot_positions
+        gt_frombag = True
 
-        put_to_file(loc_positions, loc_times, loc_out_fname)
-        put_to_file(min_positions, gt_times, gt_out_fname)
+    rospy.loginfo("Loaded {:d} ground truth positions".format(len(min_positions)))
+    
 
     # rospy.loginfo("Done loading positions")
+    # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
+    loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.5, 0])
+    if loc_frombag:
+        put_to_file(loc_positions, loc_times, loc_out_fname)
+    if gt_frombag:
+        put_to_file(min_positions, gt_times, gt_out_fname)
 
     TPs, TNs, FPs, FNs = calc_statistics(min_positions, gt_times, loc_positions, loc_times, FP_error)
     rospy.loginfo("TPs, TNs, FPs, FNs: {:d}, {:d}, {:d}, {:d}".format(TPs, TNs, FPs, FNs))
