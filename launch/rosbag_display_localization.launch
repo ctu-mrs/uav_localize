@@ -1,0 +1,55 @@
+<launch>
+
+  <arg name="uav_name" default="$(optenv UAV_NAME uav)"/>
+
+  <arg name="debug" default="false" />
+  <arg unless="$(arg debug)" name="launch_prefix" value=""/>
+  <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
+
+  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190215"/>
+  <arg name="loc_cnn_bag" default="cnn_dets_locs2.bag"/>
+  <arg name="loc_depth_bag" default="depth_dets_locs.bag"/>
+  <arg name="gt_csv" default="$(find uav_localize)/output/gt_out.csv"/>
+  <arg name="cinfo_cnn_bag" default="rs_camera_info.bag"/>
+  <arg name="cinfo_depth_bag" default="nerian_camera_info.bag"/>
+  <arg name="img_bag" default="cameras.bag"/>
+  <arg name="tf_bag" default="cam_tfs.bag"/>
+  <!-- <arg name="skip_time" default="0"/> -->
+  <!-- <arg name="delay_time" default="2"/> -->
+  <!-- <arg name="rate_publish" default="1.0"/> -->
+  <!-- <node name="rosbag_play" pkg="rosbag" type="play" args="$(arg bags_base_path)/$(arg bag_inputs) -/-clock -s $(arg skip_time) -d $(arg delay_time) -r $(arg rate_publish)" /> -->
+
+  <!-- <arg name="localization_topic" default="/uav81/uav_localization/localized_uav"/> -->
+  <arg name="loc_cnn_topic" default="/uav81/uav_localization/localized_uav"/>
+  <arg name="loc_depth_topic" default="/uav81/uav_localization/localized_uav"/>
+  <!-- <arg name="localization_topic" default="/uav81/cnn_detect/detections"/> -->
+  <!-- <arg name="ground_truth_topic" default="/uav3/odometry/odom_main"/> -->
+  <arg name="cinfo_cnn_topic" default="/camera/color/camera_info"/>
+  <arg name="cinfo_depth_topic" default="/uav81/nerian_driver/depth_camera_info"/>
+  <arg name="img_topic" default="/camera/color/image_raw"/>
+
+  <node name="localization_evaluation" pkg="uav_localize" type="displayer.py" output="screen" launch-prefix="$(arg launch_prefix)">
+    <param name="loc_cnn_bag" value="$(arg bags_base_path)/$(arg loc_cnn_bag)" />
+    <param name="loc_depth_bag" value="$(arg bags_base_path)/$(arg loc_depth_bag)" />
+    <param name="gt_csv" value="$(arg gt_csv)" />
+    <param name="cinfo_cnn_bag" value="$(arg bags_base_path)/$(arg cinfo_cnn_bag)" />
+    <param name="cinfo_depth_bag" value="$(arg bags_base_path)/$(arg cinfo_depth_bag)" />
+    <param name="img_bag" value="$(arg bags_base_path)/$(arg img_bag)" />
+    <param name="tf_bag" value="$(arg bags_base_path)/$(arg tf_bag)" />
+
+    <param name="loc_cnn_topic" value="$(arg loc_cnn_topic)" />
+    <param name="loc_depth_topic" value="$(arg loc_depth_topic)" />
+    <param name="cinfo_cnn_topic" value="$(arg cinfo_cnn_topic)" />
+    <param name="cinfo_depth_topic" value="$(arg cinfo_depth_topic)" />
+    <param name="img_topic" value="$(arg img_topic)" />
+
+    <param name="ground_truth_fname" value="$(find uav_localize)/output/gt_out.csv" />
+    <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
+  </node>
+
+  <!-- <group ns="$(arg uav_name)"> -->
+  <!--   <node name="img_repub_depth" pkg="image_transport" type="republish" args="compressedDepth in:=/uav81/rs_d435/aligned_depth_to_color/image_raw raw out:=/uav81/rs_d435/aligned_depth_to_color/image_raw" /> -->
+  <!--   <node name="img_repub_image" pkg="image_transport" type="republish" args="compressed in:=/uav81/rs_d435/color/image_raw raw out:=/uav81/rs_d435/color/image_rect_color" /> -->
+  <!-- </group> -->
+
+</launch>
