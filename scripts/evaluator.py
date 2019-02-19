@@ -275,10 +275,11 @@ def main():
         gt_times = msgs_to_times(gt_msgs)
         # loc_positions = transform_gt(loc_positions, [1.57, 3.14, 1.57, 0, 0, 0], inverse=True)
         rot_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
+        rot_positions = transform_gt(rot_positions, [0, 0.06, 0, 0, 0, 0])
         rot_positions = rot_positions - rot_positions[0, :] + loc_positions[0, :]
         # Find the transformed positions of GT which minimize RMSE with the localization
-        # min_positions = find_min_positions(rot_positions, gt_times, loc_positions, loc_times, FP_error)
-        min_positions = rot_positions
+        min_positions = find_min_positions(rot_positions, gt_times, loc_positions, loc_times, FP_error)
+        # min_positions = rot_positions
         gt_frombag = True
 
     rospy.loginfo("Loaded {:d} ground truth positions".format(len(min_positions)))
@@ -286,10 +287,12 @@ def main():
 
     # rospy.loginfo("Done loading positions")
     # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
-    loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.5, 0])
+    loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.1, 0])
     if loc_frombag:
+        rospy.loginfo('Saving localizations to CSV: {:s}'.format(loc_out_fname))
         put_to_file(loc_positions, loc_times, loc_out_fname)
     if gt_frombag:
+        rospy.loginfo('Saving ground truths to CSV: {:s}'.format(gt_out_fname))
         put_to_file(min_positions, gt_times, gt_out_fname)
 
     TPs, TNs, FPs, FNs = calc_statistics(min_positions, gt_times, loc_positions, loc_times, FP_error)

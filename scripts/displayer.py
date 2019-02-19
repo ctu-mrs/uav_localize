@@ -270,6 +270,8 @@ def main():
     cinfo_depth_topic = rospy.get_param("~cinfo_depth_topic")
     img_topic = rospy.get_param("~img_topic")
 
+    img_path = rospy.get_param("~out_img_path")
+
     ground_truth_fname = rospy.get_param("~ground_truth_fname")
 
     ## PREPARE DUMMY PUB FOR TF
@@ -310,6 +312,7 @@ def main():
     last_tf_it = 0
     publish_clock(clock_pub, start_t)
     publish_tfs_static(tf_static_pub, tf_static_msgs, start_t)
+    n_saved = 0
     for msg in image_msgs:
         if rospy.is_shutdown():
             break
@@ -324,7 +327,8 @@ def main():
         
         # #} end of PUBLISH TFs
 
-        img = bridge.imgmsg_to_cv2(msg, "bgr8")
+        img_orig = bridge.imgmsg_to_cv2(msg, "bgr8")
+        img = img_orig.copy()
 
         depth_loc_msg = find_closest(cur_stamp, loc_depth_msgs, max_dt)
         cnn_loc_msg = find_closest(cur_stamp, loc_cnn_msgs, max_dt)
@@ -362,7 +366,28 @@ def main():
         cv2.putText(img, cnn_txt, (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), )
 
         cv2.imshow(winname, img)
-        cv2.waitKey(1)
+        key = cv2.waitKey(100)
+        if key == ord("s"):
+            img = img_orig.copy()
+            if depth_pxpos is not None:
+                cv2.circle(img, depth_pxpos, 20, (255, 0, 0), 2)
+            if cnn_pxpos is not None:
+                cv2.circle(img, cnn_pxpos, 20, (0, 0, 255), 2)
+            fname = "{:s}/saveimg{:d}.png".format(img_path, n_saved)
+            n_saved += 1
+            cv2.imwrite(fname, img)
+            rospy.loginfo('Image {:s} saved'.format(fname))
+            
+
+    depth_precision = depth_TPs/float(depth_TPs + depth_FPs)
+    depth_recall = depth_TPs/float(depth_TPs + depth_FNs)
+    rospy.loginfo(depth_txt)
+    rospy.loginfo("recall: {:f}, precision: {:f}".format(depth_recall, depth_precision))
+
+    cnn_precision = cnn_TPs/float(cnn_TPs + cnn_FPs)
+    cnn_recall = cnn_TPs/float(cnn_TPs + cnn_FNs)
+    rospy.loginfo("recall: {:f}, precision: {:f}".format(cnn_recall, cnn_precision))
+    rospy.loginfo(cnn_txt)
 
 
 if __name__ == '__main__':

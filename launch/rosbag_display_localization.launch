@@ -43,6 +43,8 @@
     <param name="cinfo_depth_topic" value="$(arg cinfo_depth_topic)" />
     <param name="img_topic" value="$(arg img_topic)" />
 
+    <param name="out_img_path" value="$(find uav_localize)/output" />
+
     <param name="ground_truth_fname" value="$(find uav_localize)/output/gt_out.csv" />
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
   </node>
