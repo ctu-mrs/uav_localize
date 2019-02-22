@@ -369,14 +369,16 @@ def main():
         key = cv2.waitKey(100)
         if key == ord("s"):
             img = img_orig.copy()
+            fname = "{:s}/saveimg{:d}.png".format(img_path, n_saved)
+            raw_fname = "{:s}/raw_saveimg{:d}.png".format(img_path, n_saved)
+            n_saved += 1
+            cv2.imwrite(raw_fname, img)
             if depth_pxpos is not None:
                 cv2.circle(img, depth_pxpos, 20, (255, 0, 0), 2)
             if cnn_pxpos is not None:
                 cv2.circle(img, cnn_pxpos, 20, (0, 0, 255), 2)
-            fname = "{:s}/saveimg{:d}.png".format(img_path, n_saved)
-            n_saved += 1
             cv2.imwrite(fname, img)
-            rospy.loginfo('Image {:s} saved'.format(fname))
+            rospy.loginfo('Images {:s} and {:s} saved'.format(fname, raw_fname))
             
 
     depth_precision = depth_TPs/float(depth_TPs + depth_FPs)
