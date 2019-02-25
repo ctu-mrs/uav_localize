@@ -21,6 +21,7 @@ import os
 import csv
 import copy
 
+from PIL import Image, ImageFont, ImageDraw
 import cv2
 from cv_bridge import CvBridge
 
@@ -295,15 +296,29 @@ def publish_tfs_static(pub, msgs, stamp):
         # print("child_frame_id: \"{:s}\"".format(msg.transforms[0].child_frame_id))
         pub.publish(msg)
 
+# #{ fig2rgb_array
+
+def fig2rgb_array(fig):
+    fig.canvas.draw()
+    buf = np.array(fig.canvas.print_to_buffer()[0])
+    # buf = fig.canvas.tostring_argb()
+    ncols, nrows = fig.canvas.get_width_height()
+    buf = buf.reshape(nrows, ncols, 4)
+    ret = buf[:, :, [2, 1, 0]]
+    # ret[:, :, [1, 3]] = ret[:, :, [3, 1]]
+    return ret
+
 def fig2argb_array(fig):
     fig.canvas.draw()
-    buf = np.matrix(fig.canvas.print_to_buffer()[0])
+    buf = np.array(fig.canvas.print_to_buffer()[0])
     # buf = fig.canvas.tostring_argb()
     ncols, nrows = fig.canvas.get_width_height()
     ret = np.fromstring(buf, dtype=np.uint8).reshape(nrows, ncols, 4)
     ret[:, :, [0, 1, 2, 3]] = ret[:, :, [3, 2, 1, 0]]
     # ret[:, :, [1, 3]] = ret[:, :, [3, 1]]
     return ret
+
+# #} end of fig2argb_array
 
 def scale_by_alpha(img, a):
     img[:, :, 0] = img[:, :, 0]/255.0*a
@@ -361,6 +376,7 @@ def main():
     cnn_cinfo = load_rosbag_msgs(cinfo_cnn_bag, cinfo_cnn_topic)[0]
     depth_cinfo = load_rosbag_msgs(cinfo_depth_bag, cinfo_depth_topic)[0]
     image_msgs = load_rosbag_msgs(img_bag, img_topic, start_time=start_t, end_time=end_t)
+    # depth_msgs = load_rosbag_msgs(img_bag, depth_topic, start_time=start_t, end_time=end_t)
     tf_msgs = load_rosbag_msgs(tf_bag, "/tf", start_time=0, end_time=end_t)
     tf_static_msgs = load_rosbag_msgs(tf_bag, "/tf_static")
     # print(tf_static_msgs)
@@ -392,16 +408,21 @@ def main():
     publish_clock(clock_pub, start_t)
     publish_tfs_static(tf_static_pub, tf_static_msgs, start_t)
     n_saved = 0
+    w = 640
+    h = 480
+    dpi = 200
 
-    fig = plt.figure(figsize=(4.7, 3.2), dpi=68, facecolor='w')
-    fig.patch.set_alpha(0.0)
+    fig = plt.figure(figsize=(w/float(dpi), h/float(dpi)), dpi=dpi, facecolor='w')
+    # fig.patch.set_alpha(0.0)
     # ax = fig.add_subplot(111, projection='3d')
     ax = fig.add_subplot(111)
 
-    fig2 = plt.figure(figsize=(4.7, 3.4), dpi=68, facecolor='w')
-    fig2.patch.set_alpha(0.0)
+    fig2 = plt.figure(figsize=(w/float(dpi), h/float(dpi)/2), dpi=dpi, facecolor='w')
+    # fig2.patch.set_alpha(0.0)
     # ax = fig.add_subplot(111, projection='3d')
     ax2 = fig2.add_subplot(111)
+
+    mono_font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 26)
 
     time_hist = list()
 
@@ -432,12 +453,16 @@ def main():
         
         # #} end of PUBLISH TFs
 
+        # #{ obtain data
+        
+        img_total = 255*np.ones((2*h, 2*w, 3), dtype=np.uint8)
         img_orig = bridge.imgmsg_to_cv2(msg, "bgr8")
+        # img_depth = 
         img = img_orig.copy()
-
+        
         depth_loc_msg = find_closest_msg(cur_stamp, loc_depth_msgs, max_dt)
         cnn_loc_msg = find_closest_msg(cur_stamp, loc_cnn_msgs, max_dt)
-
+        
         depth_loc = msg_to_pos(tf_buffer, depth_loc_msg, msg.header.frame_id)
         depth_loc_wf = transform_to(depth_loc, cur_stamp, msg.header.frame_id, "local_origin", tf_buffer)
         cnn_loc = msg_to_pos(tf_buffer, cnn_loc_msg, msg.header.frame_id)
@@ -447,6 +472,25 @@ def main():
         # depth_loc_wf = depth_positions[closest_it]
         # cnn_loc_wf = cnn_positions[closest_it]
         gt_loc = transform_to(gt_loc_wf, cur_stamp, "local_origin", msg.header.frame_id, tf_buffer)
+        
+        # #} end of obtain data
+
+        # #{ draw localizations
+        
+        depth_pxpos = pos_to_pxpos(depth_loc, cmodel, offset=(0, -5))
+        cnn_pxpos = pos_to_pxpos(cnn_loc, cmodel)
+        gt_pxpos = pos_to_pxpos(gt_loc, cmodel)
+        
+        if depth_pxpos is not None:
+            cv2.circle(img, depth_pxpos, 20, (255, 0, 0), 2)
+        if cnn_pxpos is not None:
+            cv2.circle(img, cnn_pxpos, 20, (0, 0, 255), 2)
+            # cv2.rect(img, cnn_pxpos, (cnn_loc_msg.width, cnn_loc_msg.height), 20, (0, 0, 255), 2)
+        # cv2.circle(img, gt_pxpos, 20, (0, 0, 0), 2)
+        
+        # #} end of draw localizations
+
+        # #{ update statistics
 
         depth_err = None
         if depth_loc is not None:
@@ -455,62 +499,51 @@ def main():
         cnn_err = None
         if cnn_loc is not None and cnn_loc_wf[1] < 5:
             cnn_err = np.linalg.norm(gt_loc-cnn_loc)
-
-        depth_pxpos = pos_to_pxpos(depth_loc, cmodel, offset=(0, -5))
-        cnn_pxpos = pos_to_pxpos(cnn_loc, cmodel)
-        gt_pxpos = pos_to_pxpos(gt_loc, cmodel)
-
-        if depth_pxpos is not None:
-            cv2.circle(img, depth_pxpos, 20, (255, 0, 0), 2)
-        if cnn_pxpos is not None:
-            cv2.circle(img, cnn_pxpos, 20, (0, 0, 255), 2)
-            # cv2.rect(img, cnn_pxpos, (cnn_loc_msg.width, cnn_loc_msg.height), 20, (0, 0, 255), 2)
-        # cv2.circle(img, gt_pxpos, 20, (0, 0, 0), 2)
-
-        time_hist.append(cur_stamp.to_sec() - start_time)
-
+        
         if cnn_loc_msg is None:
             cnn_FNs += 1
         elif cnn_loc_msg.pose.pose.position.y > 5:
             cnn_FPs += 1
         else:
             cnn_TPs += 1
-
+        
         if depth_loc_msg is None:
             depth_FNs += 1
         else:
             depth_TPs += 1
+        
+        # #} end of update statistics
 
+        # #{ unused
+        
         # depth_TP_hist.append(depth_TPs)
         # depth_TN_hist.append(depth_TNs)
         # depth_FP_hist.append(depth_FPs)
         # depth_FN_hist.append(depth_FNs)
-
+        
         # cnn_TP_hist.append(cnn_TPs)
         # cnn_TN_hist.append(cnn_TNs)
         # cnn_FP_hist.append(cnn_FPs)
         # cnn_FN_hist.append(cnn_FNs)
         
+        # #} end of unused
+        
+        time_hist.append(cur_stamp.to_sec() - start_time)
         depth_err_hist.append(depth_err)
         cnn_err_hist.append(cnn_err)
-
-        # depth_txt = "Our detector; TPs: {:6d}, TNs: {:6d}, FPs: {:6d}, FNs: {:6d}".format(depth_TPs, depth_TNs, depth_FPs, depth_FNs)
-        # cnn_txt =   "CNN detector; TPs: {:6d}, TNs: {:6d}, FPs: {:6d}, FNs: {:6d}".format(cnn_TPs, cnn_TNs, cnn_FPs, cnn_FNs)
-
-        # cv2.putText(img, depth_txt, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), )
-        # cv2.putText(img, cnn_txt, (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), )
 
         # #{ PLOT THE POSITIONS
 
         ax.clear()
-        ax.patch.set_alpha(0.0)
+        # ax.patch.set_alpha(0.0)
         ax.set_xlim((-10, 60))
         ax.set_ylim((-20, 20))
         ax.set_xlabel('x (x)')
         ax.set_ylabel('y (m)')
         ax.set_aspect('equal')
-        ax.yaxis.set_label_coords(-0.05, 0.5)
-        ax.xaxis.set_label_coords(0.5, -0.1)
+        ax.set_title('top view')
+        ax.yaxis.set_label_coords(-0.10, 0.5)
+        ax.xaxis.set_label_coords(0.5, -0.15)
         ax.grid()
         ax.set_xticks(np.arange(-10, 61, 10))
         ax.set_yticks(np.arange(-20, 21, 10))
@@ -522,34 +555,59 @@ def main():
             ax.plot([cnn_loc_wf[0]], [cnn_loc_wf[1]], 'rx')
         # ax.plot([gt_loc[0]], [gt_loc[1]], [gt_loc[2]], 'x')
         ax.plot([gt_loc_wf[0]], [gt_loc_wf[1]], '.', color='black')
-        fig_data = fig2argb_array(fig)
-        add_with_alpha(img, fig_data, 0, 0)
+        fig_data = fig2rgb_array(fig)
+        # add_with_alpha(img, fig_data, 0, 0)
+        img_total[h:2*h, 0:w, :] = fig_data
         
         # #} end of PLOT THE POSITIONS
 
-        # #{ PLOT THE STATISTICS
+        # #{ PLOT THE ERORS
 
         ax2.clear()
-        ax2.patch.set_alpha(0.0)
-        ax2.set_xlim((0, np.ceil(duration)))
+        # ax2.patch.set_alpha(0.0)
+        ax2.set_xlim((0, 60))
         ax2.set_ylim((0, 20))
         ax2.set_xlabel('time (s)')
-        ax2.set_ylabel('RMSE (m)')
-        ax2.yaxis.set_label_coords(-0.12, 0.5)
-        ax2.xaxis.set_label_coords(0.5, -0.08)
+        # ax2.set_ylabel('RMSE (m)')
+        ax2.set_title('localization error')
+        ax2.set_aspect(1/1.5)
+        ax2.set_yticks(np.arange(0, 10, 20))
+        ax2.yaxis.set_label_coords(-0.15, 0.5)
+        ax2.xaxis.set_label_coords(0.5, -0.25)
         ax2.grid()
 
         # ax2.plot(time_hist, depth_TP_hist)
         # ax2.plot(time_hist, depth_FN_hist)
         ax2.plot(time_hist, depth_err_hist, 'b')
         ax2.plot(time_hist, cnn_err_hist, 'r')
-        fig_data = fig2argb_array(fig2)
-        add_with_alpha(img, fig_data, 320, 0)
+        fig_data = fig2rgb_array(fig2)
+        # add_with_alpha(img, fig_data, 320, 0)
+        img_total[int(1.5*h):2*h, w:2*w, :] = fig_data
         
-        # #} end of PLOT THE STATISTICS
+        # #} end of PLOT THE ERROR
 
+        # #{ CREATE TEXT IMAGE
+        
+        img_text = 255*np.ones((h/2, w, 3), dtype=np.uint8)
+        img_p = Image.fromarray(img_text)
+      
+        draw = ImageDraw.Draw(img_p)
+        header_txt= "Detector |  TPs |  TNs |  FPs |  FNs"
+        depth_txt = "ours     | {:4d} | {:4d} | {:4d} | {:4d}".format(depth_TPs, depth_TNs, depth_FPs, depth_FNs)
+        cnn_txt =   "CNN      | {:4d} | {:4d} | {:4d} | {:4d}".format(cnn_TPs, cnn_TNs, cnn_FPs, cnn_FNs)
+        
+        draw.text((20, 26), header_txt, (0,0,0), font=mono_font)
+        draw.text((20, 60), depth_txt, (255,0,0), font=mono_font)
+        draw.text((20, 90), cnn_txt, (0,0,255), font=mono_font)
 
-        cv2.imshow(winname, img)
+        img_text = np.array(img_p)
+        cv2.line(img_text, (0, 58), (w, 58), (0,0,0))
+        img_total[h:int(1.5*h), w:2*w, :] = img_text
+        
+        # #} end of unused
+
+        img_total[0:h, 0:w, :] = img
+        cv2.imshow(winname, img_total)
         key = cv2.waitKey(1)
         # if key == ord("s"):
         #     img = img_orig.copy()
