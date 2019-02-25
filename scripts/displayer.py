@@ -109,8 +109,19 @@ def load_rosbag_cinfo(bag_fname, topic):
         break
     return cinfo
 
-def load_rosbag_msgs(bag_fname, topic, skip_time=0, skip_time_end=0, start_time=None, end_time=None):
+def load_rosbag_stream(bag_fname, topic, skip_time=0, skip_time_end=0, start_time=None, end_time=None, bag=None):
     rospy.loginfo("Using rosbag {:s}".format(bag_fname))
+    if bag is None:
+        bag = rosbag.Bag(bag_fname)
+    skip = rospy.Duration.from_sec(skip_time)
+    if start_time is None:
+        start_time = rospy.Time.from_sec(bag.get_start_time()) + skip
+    if end_time is None:
+        skip_end = rospy.Duration.from_sec(skip_time_end)
+        end_time = rospy.Time.from_sec(bag.get_end_time()) - skip_end
+    return bag.read_messages(topics=topic, start_time=start_time, end_time=end_time)
+
+def load_rosbag_msgs(bag_fname, topic, skip_time=0, skip_time_end=0, start_time=None, end_time=None):
     bag = rosbag.Bag(bag_fname)
     n_msgs = bag.get_message_count(topic_filters=topic)
     if n_msgs == 0:
@@ -119,14 +130,10 @@ def load_rosbag_msgs(bag_fname, topic, skip_time=0, skip_time_end=0, start_time=
         rospy.loginfo("Loading {:d} messages".format(n_msgs))
     msgs = n_msgs*[None]
 
-    skip = rospy.Duration.from_sec(skip_time)
-    if start_time is None:
-        start_time = rospy.Time.from_sec(bag.get_start_time()) + skip
-    if end_time is None:
-        skip_end = rospy.Duration.from_sec(skip_time_end)
-        end_time = rospy.Time.from_sec(bag.get_end_time()) - skip_end
+    msg_stream = load_rosbag_stream(bag_fname, topic, skip_time=skip_time, skip_time_end=skip_time_end, start_time=start_time, end_time=end_time, bag=bag)
+
     it = 0
-    for topic, msg, cur_stamp in bag.read_messages(topics=topic, start_time=start_time, end_time=end_time):
+    for topic, msg, cur_stamp in msg_stream:
         if rospy.is_shutdown():
             break
         msgs[it] = msg
@@ -356,6 +363,7 @@ def main():
     cinfo_cnn_topic = rospy.get_param("~cinfo_cnn_topic")
     cinfo_depth_topic = rospy.get_param("~cinfo_depth_topic")
     img_topic = rospy.get_param("~img_topic")
+    depth_topic = rospy.get_param("~depth_topic")
 
     img_path = rospy.get_param("~out_img_path")
 
@@ -367,7 +375,7 @@ def main():
     listener = TransformListener(tf_buffer)
 
     ## START DATA LOADING
-    rosbag_skip_time = 0
+    rosbag_skip_time = 10
     rosbag_skip_time_end = 0
     loc_cnn_msgs = load_rosbag_msgs(loc_cnn_bag, loc_cnn_topic, skip_time=rosbag_skip_time, skip_time_end=rosbag_skip_time_end)
     start_t = loc_cnn_msgs[0].header.stamp
@@ -375,8 +383,9 @@ def main():
     loc_depth_msgs = load_rosbag_msgs(loc_depth_bag, loc_depth_topic, start_time=start_t, end_time=end_t)
     cnn_cinfo = load_rosbag_msgs(cinfo_cnn_bag, cinfo_cnn_topic)[0]
     depth_cinfo = load_rosbag_msgs(cinfo_depth_bag, cinfo_depth_topic)[0]
-    image_msgs = load_rosbag_msgs(img_bag, img_topic, start_time=start_t, end_time=end_t)
+    # image_msgs = load_rosbag_msgs(img_bag, img_topic, start_time=start_t, end_time=end_t)
     # depth_msgs = load_rosbag_msgs(img_bag, depth_topic, start_time=start_t, end_time=end_t)
+    image_msgs_stream = load_rosbag_stream(img_bag, [img_topic, depth_topic], start_time=start_t, end_time=end_t)
     tf_msgs = load_rosbag_msgs(tf_bag, "/tf", start_time=0, end_time=end_t)
     tf_static_msgs = load_rosbag_msgs(tf_bag, "/tf_static")
     # print(tf_static_msgs)
@@ -390,8 +399,6 @@ def main():
     start_time = gt_times[0]
     end_time = gt_times[-1]
     duration = end_time - start_time
-    image_msgs = cut_from(image_msgs, rospy.Time.from_sec(start_time))
-    image_msgs = cut_to(image_msgs, rospy.Time.from_sec(end_time))
 
     cmodel = PinholeCameraModel()
     cmodel.fromCameraInfo(cnn_cinfo)
@@ -438,12 +445,31 @@ def main():
 
     depth_err_hist = list()
     cnn_err_hist = list()
+    img_depth = None
+    img = None
 
-    for msg in image_msgs:
+    for topic, msg, cur_stamp in image_msgs_stream:
         if rospy.is_shutdown():
             break
 
-        cur_stamp = msg.header.stamp
+        # #{ obtain images
+        
+        if topic == depth_topic:
+            img_depth = bridge.imgmsg_to_cv2(msg, "mono16")
+            # img_depth = cv2.resize(img_depth, (w, h))
+            h2, w2 = img_depth.shape
+            dh = h2 - h
+            dw = w2 - w
+            img_depth = img_depth[dh/2:dh/2+h, dw/2:dw/2+w]
+            img_depth = cv2.convertScaleAbs(img_depth, alpha=1/256.0)
+            img_depth = cv2.cvtColor(img_depth, cv2.COLOR_GRAY2BGR)
+            # img_depth = cv2.applyColorMap(img_depth, cv2.COLORMAP_JET)
+        else:
+            img = bridge.imgmsg_to_cv2(msg, "bgr8")
+        if img_depth is None or img is None:
+            continue
+        
+        # #} end of obtain images
 
         # #{ PUBLISH TFs and Clock
         
@@ -456,9 +482,6 @@ def main():
         # #{ obtain data
         
         img_total = 255*np.ones((2*h, 2*w, 3), dtype=np.uint8)
-        img_orig = bridge.imgmsg_to_cv2(msg, "bgr8")
-        # img_depth = 
-        img = img_orig.copy()
         
         depth_loc_msg = find_closest_msg(cur_stamp, loc_depth_msgs, max_dt)
         cnn_loc_msg = find_closest_msg(cur_stamp, loc_cnn_msgs, max_dt)
@@ -607,6 +630,7 @@ def main():
         # #} end of unused
 
         img_total[0:h, 0:w, :] = img
+        img_total[0:h, w:2*w, :] = img_depth
         cv2.imshow(winname, img_total)
         key = cv2.waitKey(1)
         # if key == ord("s"):

@@ -29,7 +29,7 @@
   <arg name="cinfo_cnn_topic" default="/camera/color/camera_info"/>
   <arg name="cinfo_depth_topic" default="/uav81/nerian_driver/depth_camera_info"/>
   <arg name="img_topic" default="/camera/color/image_raw"/>
-  <arg name="depth_topic" default="/uav81/nerian_stereo/depth_image"/>
+  <arg name="depth_topic" default="/uav81/nerian_driver/depth_map"/>
 
   <node name="localization_evaluation" pkg="uav_localize" type="displayer.py" output="screen" launch-prefix="$(arg launch_prefix)">
     <param name="loc_cnn_bag" value="$(arg bags_base_path)/$(arg loc_cnn_bag)" />
