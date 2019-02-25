@@ -9,7 +9,9 @@
   <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190215"/>
   <arg name="loc_cnn_bag" default="cnn_dets_locs2.bag"/>
   <arg name="loc_depth_bag" default="depth_dets_locs.bag"/>
-  <arg name="gt_csv" default="$(find uav_localize)/output/gt_out.csv"/>
+  <arg name="depth_csv" default="$(find uav_localize)/output/ours/loc_out.csv"/>
+  <arg name="cnn_csv" default="$(find uav_localize)/output/cnn/loc_out.csv"/>
+  <arg name="gt_csv" default="$(find uav_localize)/output/ours/gt_out.csv"/>
   <arg name="cinfo_cnn_bag" default="rs_camera_info.bag"/>
   <arg name="cinfo_depth_bag" default="nerian_camera_info.bag"/>
   <arg name="img_bag" default="cameras.bag"/>
@@ -31,6 +33,8 @@
   <node name="localization_evaluation" pkg="uav_localize" type="displayer.py" output="screen" launch-prefix="$(arg launch_prefix)">
     <param name="loc_cnn_bag" value="$(arg bags_base_path)/$(arg loc_cnn_bag)" />
     <param name="loc_depth_bag" value="$(arg bags_base_path)/$(arg loc_depth_bag)" />
+    <param name="depth_csv" value="$(arg depth_csv)" />
+    <param name="cnn_csv" value="$(arg cnn_csv)" />
     <param name="gt_csv" value="$(arg gt_csv)" />
     <param name="cinfo_cnn_bag" value="$(arg bags_base_path)/$(arg cinfo_cnn_bag)" />
     <param name="cinfo_depth_bag" value="$(arg bags_base_path)/$(arg cinfo_depth_bag)" />
@@ -45,7 +49,7 @@
 
     <param name="out_img_path" value="$(find uav_localize)/output" />
 
-    <param name="ground_truth_fname" value="$(find uav_localize)/output/gt_out.csv" />
+    <!-- <param name="ground_truth_fname" value="$(find uav_localize)/output/ours/gt_out.csv" /> -->
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
   </node>
 

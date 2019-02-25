@@ -6,10 +6,12 @@
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
   <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
 
-  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190215"/>
+  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190221"/>
   <!-- <arg name="loc_bag" default="depth_dets_locs.bag"/> -->
-  <arg name="loc_bag" default="cnn_dets_locs2.bag"/>
-  <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/gt_odom.bag"/>
+  <!-- <arg name="loc_bag" default="dets_locs1.bag"/> -->
+  <arg name="loc_bag" default="dets_locs2.bag"/>
+  <!-- <arg name="gt_bag" default="target/_2019-02-21-09-56-01.bag"/> -->
+  <arg name="gt_bag" default="target/_2019-02-21-10-02-53.bag"/>
   <!-- <arg name="skip_time" default="0"/> -->
   <!-- <arg name="delay_time" default="2"/> -->
   <!-- <arg name="rate_publish" default="1.0"/> -->
@@ -24,8 +26,14 @@
     <param name="ground_truth_bag_name" value="$(arg bags_base_path)/$(arg gt_bag)" />
     <param name="localization_topic_name" value="$(arg localization_topic)" />
     <param name="ground_truth_topic_name" value="$(arg ground_truth_topic)" />
-    <param name="localization_out_fname" value="$(find uav_localize)/output/loc_out.csv" />
-    <param name="ground_truth_out_fname" value="$(find uav_localize)/output/gt_out.csv" />
+    <param name="localization_out_fname2" value="$(find uav_localize)/output/dataset1/loc_out.csv" />
+    <param name="ground_truth_out_fname2" value="$(find uav_localize)/output/dataset1/gt_out.csv" />
+    <param name="localization_out_fname3" value="$(find uav_localize)/output/loc_out.csv" />
+    <param name="ground_truth_out_fname3" value="$(find uav_localize)/output/gt_out.csv" />
+    <param name="localization_out_fname" value="$(find uav_localize)/output/ours/loc_out.csv" />
+    <param name="ground_truth_out_fname" value="$(find uav_localize)/output/ours/gt_out.csv" />
+    <param name="distance_error_out_fname" value="$(find uav_localize)/output/dist_err_out.csv" />
+    <param name="TP_probability_out_fname" value="$(find uav_localize)/output/TP_prob_out.csv" />
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
   </node>
 

@@ -24,11 +24,13 @@ def main():
     tf_pub = rospy.Publisher("/tf", TFMessage, queue_size=100)
 
     rate = rospy.Rate(1000)
-    rate.sleep()
     while not rospy.is_shutdown():
         if last_odom_msg is None:
             rospy.logwarn_throttle(1.0, "waiting for odom data")
-            rate.sleep()
+            try:
+                rate.sleep()
+            except:
+                pass
             continue
 
         tf = TransformStamped()
