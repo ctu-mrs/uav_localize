@@ -49,7 +49,7 @@
     <param name="img_topic" value="$(arg img_topic)" />
     <param name="depth_topic" value="$(arg depth_topic)" />
 
-    <param name="out_img_path" value="$(find uav_localize)/output" />
+    <param name="out_vid_path" value="$(find uav_localize)/output" />
 
     <!-- <param name="ground_truth_fname" value="$(find uav_localize)/output/ours/gt_out.csv" /> -->
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
