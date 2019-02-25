@@ -70,15 +70,27 @@ def load_csv_data(csv_fname):
 
 # #} end of load_csv_data function
 
-def msg_to_pos(tf_buffer, msg, to_frame_id):
+def msg_to_rects(msg):
+    ret = list()
+    if msg is None:
+        return ret
+    for det in msg.detections:
+        pxw = int(det.width*det.roi.width)
+        pxh = int(det.height*det.roi.height)
+        pxx = int(det.x*det.roi.width+det.roi.x_offset - pxw/2)
+        pxy = int(det.y*det.roi.height+det.roi.y_offset - pxh/2)
+        ret.append(((pxx, pxy), (pxx+pxw, pxy+pxh)))
+    return ret
+
+def msg_to_pos(tf_buffer, msg, to_frame_id, scale=1.0):
     if msg is None:
         return None
 
     ps = PointStamped()
     ps.header = msg.header
-    ps.point.x = msg.pose.pose.position.x
-    ps.point.y = msg.pose.pose.position.y
-    ps.point.z = msg.pose.pose.position.z
+    ps.point.x = msg.pose.pose.position.x*scale
+    ps.point.y = msg.pose.pose.position.y*scale
+    ps.point.z = msg.pose.pose.position.z*scale
 
     try:
         ps2 = tf_buffer.transform(ps, to_frame_id)
@@ -172,7 +184,7 @@ def process_msgs(msgs, cinfo, shift):
 
 
 def find_closest_msg(stamp, msgs, max_dt=float('Inf'), last_it=0):
-    closest_it = None
+    closest_it = last_it
     closest_diff = float('Inf')
     for it in range(last_it, len(msgs)):
         cur_stamp = msgs[it].header.stamp
@@ -182,7 +194,7 @@ def find_closest_msg(stamp, msgs, max_dt=float('Inf'), last_it=0):
             closest_diff = cur_diff
         else:
             break
-    if cur_diff > max_dt:
+    if closest_diff > max_dt:
         closest_msg = None
     else:
         closest_msg = msgs[closest_it]
@@ -347,7 +359,9 @@ def main():
 
     ## LOAD ROS PARAMETERS
     loc_cnn_bag = rospy.get_param("~loc_cnn_bag")
+    det_cnn_bag = rospy.get_param("~det_cnn_bag")
     loc_depth_bag = rospy.get_param("~loc_depth_bag")
+    det_depth_bag = rospy.get_param("~det_depth_bag")
     depth_csv = rospy.get_param("~depth_csv")
     cnn_csv = rospy.get_param("~cnn_csv")
     gt_csv = rospy.get_param("~gt_csv")
@@ -357,7 +371,9 @@ def main():
     tf_bag = rospy.get_param("~tf_bag")
 
     loc_cnn_topic = rospy.get_param("~loc_cnn_topic")
+    det_cnn_topic = rospy.get_param("~det_cnn_topic")
     loc_depth_topic = rospy.get_param("~loc_depth_topic")
+    det_depth_topic = rospy.get_param("~det_depth_topic")
     cinfo_cnn_topic = rospy.get_param("~cinfo_cnn_topic")
     cinfo_depth_topic = rospy.get_param("~cinfo_depth_topic")
     img_topic = rospy.get_param("~img_topic")
@@ -376,9 +392,11 @@ def main():
     rosbag_skip_time = 18
     rosbag_skip_time_end = 10
     loc_cnn_msgs = load_rosbag_msgs(loc_cnn_bag, loc_cnn_topic, skip_time=rosbag_skip_time, skip_time_end=rosbag_skip_time_end)
+    det_cnn_msgs = load_rosbag_msgs(det_cnn_bag, det_cnn_topic, skip_time=rosbag_skip_time, skip_time_end=rosbag_skip_time_end)
     start_t = loc_cnn_msgs[0].header.stamp
     end_t = loc_cnn_msgs[-1].header.stamp
     loc_depth_msgs = load_rosbag_msgs(loc_depth_bag, loc_depth_topic, start_time=start_t, end_time=end_t)
+    det_depth_msgs = load_rosbag_msgs(det_depth_bag, det_depth_topic, start_time=start_t, end_time=end_t)
     cnn_cinfo = load_rosbag_msgs(cinfo_cnn_bag, cinfo_cnn_topic)[0]
     depth_cinfo = load_rosbag_msgs(cinfo_depth_bag, cinfo_depth_topic)[0]
     # image_msgs = load_rosbag_msgs(img_bag, img_topic, start_time=start_t, end_time=end_t)
@@ -417,15 +435,36 @@ def main():
     h = 480
     dpi = 200
 
+    # #{ SETUP FIGURES AND AXES
+    
     fig = plt.figure(figsize=(w/float(dpi), h/float(dpi)), dpi=dpi, facecolor='w')
-    # fig.patch.set_alpha(0.0)
-    # ax = fig.add_subplot(111, projection='3d')
     ax = fig.add_subplot(111)
-
+    ax.set_xlim((-10, 60))
+    ax.set_ylim((-20, 20))
+    ax.set_xlabel('x (x)')
+    ax.set_ylabel('y (m)')
+    ax.set_aspect('equal')
+    ax.set_title('top view')
+    ax.yaxis.set_label_coords(-0.10, 0.5)
+    ax.xaxis.set_label_coords(0.5, -0.15)
+    ax.grid()
+    ax.set_xticks(np.arange(-10, 61, 10))
+    ax.set_yticks(np.arange(-20, 21, 10))
+    
     fig2 = plt.figure(figsize=(w/float(dpi), 3*h/float(dpi)/4), dpi=dpi, facecolor='w')
-    # fig2.patch.set_alpha(0.0)
-    # ax = fig.add_subplot(111, projection='3d')
     ax2 = fig2.add_subplot(111)
+    ax2.clear()
+    ax2.set_xlim((0, 50))
+    ax2.set_ylim((0, 20))
+    ax2.set_xlabel('time (s)')
+    ax2.set_title('localization error')
+    ax2.set_aspect(1/1.2)
+    ax2.set_yticks((0, 10, 20))
+    ax2.yaxis.set_label_coords(-0.20, 0.5)
+    ax2.xaxis.set_label_coords(0.5, -0.30)
+    ax2.grid()
+    
+    # #} end of SETUP FIGURES AND AXES
 
     mono_font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeMono.ttf", 26)
 
@@ -442,7 +481,9 @@ def main():
     # cnn_FN_hist = list()
 
     last_depth_loc_idx = 0
+    last_depth_det_idx = 0
     last_cnn_loc_idx = 0
+    last_cnn_det_idx = 0
     closest_it = 0
 
     depth_err_hist = list()
@@ -461,8 +502,14 @@ def main():
     next_write = start_t
     vid_period = rospy.Duration.from_sec(1/float(vid_fps))
 
+    depth_loc_plt = None
+    cnn_loc_plt = None
+    gt_loc_plt = None
+    depth_hist_plt = None
+    cnn_hist_plt = None
+
     for topic, msg, cur_stamp in image_msgs_stream:
-        if rospy.is_shutdown():
+        if rospy.is_shutdown() or cur_stamp > end_t:
             break
 
         # #{ obtain images
@@ -503,11 +550,15 @@ def main():
         img_total = 255*np.ones((2*h, 2*w, 3), dtype=np.uint8)
         
         depth_loc_msg, last_depth_loc_idx = find_closest_msg(cur_stamp, loc_depth_msgs, max_dt, last_depth_loc_idx)
+        depth_det_msg, last_depth_det_idx = find_closest_msg(cur_stamp, det_depth_msgs, max_dt, last_depth_det_idx)
         cnn_loc_msg, last_cnn_loc_idx = find_closest_msg(cur_stamp, loc_cnn_msgs, max_dt, last_cnn_loc_idx)
+        cnn_det_msg, last_cnn_det_idx = find_closest_msg(cur_stamp, det_cnn_msgs, max_dt, last_cnn_det_idx)
         
         depth_loc = msg_to_pos(tf_buffer, depth_loc_msg, img_frame_id)
+        depth_det = msg_to_rects(depth_det_msg)
         depth_loc_wf = transform_to(depth_loc, cur_stamp, img_frame_id, "local_origin", tf_buffer)
-        cnn_loc = msg_to_pos(tf_buffer, cnn_loc_msg, img_frame_id)
+        cnn_loc = msg_to_pos(tf_buffer, cnn_loc_msg, img_frame_id, scale=0.6)
+        cnn_det = msg_to_rects(cnn_det_msg)
         cnn_loc_wf = transform_to(cnn_loc, cur_stamp, img_frame_id, "local_origin", tf_buffer)
         closest_it = find_closest(cur_stamp.to_sec(), gt_times, closest_it)
         gt_loc_wf = gt_positions[closest_it]
@@ -534,6 +585,15 @@ def main():
             cv2.circle(img_d, cnn_pxpos, 20, (0, 0, 255), 2)
             # cv2.rect(img, cnn_pxpos, (cnn_loc_msg.width, cnn_loc_msg.height), 20, (0, 0, 255), 2)
         # cv2.circle(img, gt_pxpos, 20, (0, 0, 0), 2)
+        
+        # #} end of draw localizations
+
+        # #{ draw localizations
+        
+        for rect in depth_det:
+            cv2.rectangle(img, rect[0], rect[1], (255, 0, 0), 2)
+        for rect in cnn_det:
+            cv2.rectangle(img, rect[0], rect[1], (0, 0, 255), 2)
         
         # #} end of draw localizations
 
@@ -593,27 +653,25 @@ def main():
 
         # #{ PLOT THE POSITIONS
 
-        ax.clear()
-        # ax.patch.set_alpha(0.0)
-        ax.set_xlim((-10, 60))
-        ax.set_ylim((-20, 20))
-        ax.set_xlabel('x (x)')
-        ax.set_ylabel('y (m)')
-        ax.set_aspect('equal')
-        ax.set_title('top view')
-        ax.yaxis.set_label_coords(-0.10, 0.5)
-        ax.xaxis.set_label_coords(0.5, -0.15)
-        ax.grid()
-        ax.set_xticks(np.arange(-10, 61, 10))
-        ax.set_yticks(np.arange(-20, 21, 10))
-        if depth_loc is not None:
-            # ax.plot([depth_loc[0]], [depth_loc[1]], [depth_loc[2]], 'bx')
-            ax.plot([depth_loc_wf[0]], [depth_loc_wf[1]], 'bx')
-        if cnn_loc is not None:
-            # ax.plot([cnn_loc[0]], [cnn_loc[1]], [cnn_loc[2]], 'rx')
-            ax.plot([cnn_loc_wf[0]], [cnn_loc_wf[1]], 'rx')
+        if depth_loc_plt is None and depth_loc is not None:
+            depth_loc_plt, = ax.plot([depth_loc_wf[0]], [depth_loc_wf[1]], 'bx')
+        else:
+            if depth_loc is None:
+                depth_loc_plt.set_data([], [])
+            else:
+                depth_loc_plt.set_data([depth_loc_wf[0]], [depth_loc_wf[1]])
+        if cnn_loc_plt is None and cnn_loc is not None:
+            cnn_loc_plt, = ax.plot([cnn_loc_wf[0]], [cnn_loc_wf[1]], 'rx')
+        else:
+            if cnn_loc is None:
+                cnn_loc_plt.set_data([], [])
+            else:
+                cnn_loc_plt.set_data([cnn_loc_wf[0]], [cnn_loc_wf[1]])
         # ax.plot([gt_loc[0]], [gt_loc[1]], [gt_loc[2]], 'x')
-        ax.plot([gt_loc_wf[0]], [gt_loc_wf[1]], '.', color='black')
+        if gt_loc_plt is None:
+            gt_loc_plt, = ax.plot([gt_loc_wf[0]], [gt_loc_wf[1]], '.', color='black')
+        else:
+            gt_loc_plt.set_data([gt_loc_wf[0]], [gt_loc_wf[1]])
         fig_data = fig2rgb_array(fig)
         # add_with_alpha(img, fig_data, 0, 0)
         img_total[h:2*h, 0:w, :] = fig_data
@@ -621,24 +679,16 @@ def main():
         # #} end of PLOT THE POSITIONS
 
         # #{ PLOT THE ERRORS
+        
+        if depth_hist_plt is None:
+            depth_hist_plt, = ax2.plot(time_hist, depth_err_hist, 'b')
+        else:
+            depth_hist_plt.set_data(time_hist, depth_err_hist)
 
-        ax2.clear()
-        # ax2.patch.set_alpha(0.0)
-        ax2.set_xlim((0, 50))
-        ax2.set_ylim((0, 20))
-        ax2.set_xlabel('time (s)')
-        # ax2.set_ylabel('RMSE (m)')
-        ax2.set_title('localization error')
-        ax2.set_aspect(1/1.2)
-        ax2.set_yticks((0, 10, 20))
-        ax2.yaxis.set_label_coords(-0.20, 0.5)
-        ax2.xaxis.set_label_coords(0.5, -0.30)
-        ax2.grid()
-
-        # ax2.plot(time_hist, depth_TP_hist)
-        # ax2.plot(time_hist, depth_FN_hist)
-        ax2.plot(time_hist, depth_err_hist, 'b')
-        ax2.plot(time_hist, cnn_err_hist, 'r')
+        if cnn_hist_plt is None:
+            cnn_hist_plt, = ax2.plot(time_hist, cnn_err_hist, 'r')
+        else:
+            cnn_hist_plt.set_data(time_hist, cnn_err_hist)
         fig_data = fig2rgb_array(fig2)
         # add_with_alpha(img, fig_data, 320, 0)
         img_total[int(5/float(4)*h):2*h, w:2*w, :] = fig_data
