@@ -75,6 +75,18 @@ def load_csv_data(csv_fname):
             it += 1
     return (positions, times)
 
+def load_csv_tf(csv_fname):
+    rospy.loginfo("Using CSV file {:s}".format(csv_fname))
+    with open(csv_fname, 'r') as fhandle:
+        first_loaded = False
+        csvreader = csv.reader(fhandle, delimiter=',')
+        for row in csvreader:
+            if not first_loaded:
+                first_loaded = True
+                continue
+            tf = np.array([float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])])
+            return tf
+
 def cut_to(msgs, end_time):
     end_it = 0
     for msg in msgs:
@@ -136,7 +148,7 @@ def calc_errors_time(positions1, times1, positions2, times2):
         time1 = times1[it]
         closest_it = find_closest(time1, times2)
         # sys.stdout.write("{:d}: {:f}s X {:f}s  :: ".format(it, time1, times2[closest_it]))
-        if abs(times2[closest_it] - time1) > max_dt:
+        if abs(times2[closest_it] - time1) > max_dt or positions2[closest_it][1] > 6:
             # print("FP")
             continue
         # print("TP")
@@ -231,6 +243,11 @@ def put_to_file(positions, times, fname):
         for it in range(0, len(positions)):
             ofhandle.write("{:f},{:f},{:f},{:f}\n".format(positions[it, 0], positions[it, 1], positions[it, 2], times[it]))
 
+def put_tf_to_file(tf, fname):
+    with open(fname, 'w') as ofhandle:
+        ofhandle.write("x,y,z,yaw,pitch,roll\n")
+        ofhandle.write("{:f},{:f},{:f},{:f},{:f},{:f}\n".format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5]))
+
 def put_errs_to_file(dists, errors, fname):
     with open(fname, 'w') as ofhandle:
         ofhandle.write("error,distance\n")
@@ -280,18 +297,29 @@ def main():
     gt_out_fname2 = rospy.get_param('~ground_truth_out_fname2')
     loc_out_fname3 = rospy.get_param('~localization_out_fname3')
     gt_out_fname3 = rospy.get_param('~ground_truth_out_fname3')
+    tf_out_fname = rospy.get_param('~tf_out_fname')
     dist_err_out_fname = rospy.get_param('~distance_error_out_fname')
     TP_prob_out_fname = rospy.get_param('~TP_probability_out_fname')
 
     # msgs = load_pickle(in_fname)
-    FP_error = 8.0 # meters
+    # FP_error = 8.0 # meters
+    FP_error = float('Inf')
 
     rosbag_skip_time = 0
     rosbag_skip_time_end = 0
+
+    if os.path.isfile(tf_out_fname):
+        rospy.loginfo("File {:s} found, loading it".format(tf_out_fname))
+        tf = load_csv_tf(tf_out_fname)
+        rospy.loginfo("Loaded a tf [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}] from {:s}".format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5], tf_out_fname))
+        tf_frombag = False
+    else:
+        tf_frombag = True
+
     if os.path.isfile(loc_out_fname):
         rospy.loginfo("File {:s} found, loading it".format(loc_out_fname))
         loc_positions, loc_times = load_csv_data(loc_out_fname)
-        rospy.loginfo("Loaded {:d} positions from {:s}".format(len(loc_positions1), loc_out_fname))
+        rospy.loginfo("Loaded {:d} positions from {:s}".format(len(loc_positions), loc_out_fname))
         # loc_positions2, loc_times2 = load_csv_data(loc_out_fname2)
         # rospy.loginfo("Loaded {:d} positions from {:s}".format(len(loc_positions2), loc_out_fname2))
         # loc_positions3, loc_times3 = load_csv_data(loc_out_fname3)
@@ -349,7 +377,6 @@ def main():
         gt_idxs = np.argsort(gt_times)
         gt_positions = gt_positions[gt_idxs]
         gt_times = gt_times[gt_idxs]
-        plt.plot(gt_positions[:, 0], gt_positions[:, 1], 'b')
         # print("gt:", gt_times[0], gt_times[-1])
         # loc_positions = transform_gt(loc_positions, [1.57, 3.14, 1.57, 0, 0, 0], inverse=True)
         # rot_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
@@ -363,8 +390,10 @@ def main():
         nnons = ~np.isnan(loc_positions_time_aligned[:, 0])
         loc_pos = loc_positions_time_aligned[nnons, :]
         rot_pos = rot_positions[nnons, :]
-        tf = find_min_tf(rot_pos, loc_pos, FP_error, only_rot=True)
+        if tf_frombag:
+            tf = find_min_tf(rot_pos, loc_pos, FP_error, only_rot=True)
         min_positions = transform_gt(rot_positions, tf)
+        put_tf_to_file(tf, tf_out_fname)
 
         loc_positions += zero_pos
         min_positions += zero_pos
@@ -372,6 +401,7 @@ def main():
         # min_positions = rot_positions
         gt_frombag = True
 
+        plt.plot(loc_positions[:, 0], loc_positions[:, 1], 'b')
         plt.plot(min_positions[:, 0], min_positions[:, 1], 'r')
         plt.show()
 
@@ -380,6 +410,8 @@ def main():
     print("loc:", loc_times[0], loc_times[-1])
     print("gt:", gt_times[0], gt_times[-1])
 
+    # #{ 
+    
     # times_against_trees1 = np.matrix([
     #     [155.0],
     #     [185.0] 
@@ -403,10 +435,15 @@ def main():
     # loc_times = loc_times[loc_intime_idxs]
     # min_positions = min_positions[gt_intime_idxs]
     # gt_times = gt_times[gt_intime_idxs]
+    
+    # #} end of 
 
     # rospy.loginfo("Done loading positions")
     # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
     # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.1, 0])
+    if tf_frombag:
+        rospy.loginfo('Saving TF to CSV: {:s}'.format(tf_out_fname))
+        put_tf_to_file(tf, tf_out_fname)
     if loc_frombag:
         rospy.loginfo('Saving localizations to CSV: {:s}'.format(loc_out_fname))
         put_to_file(loc_positions, loc_times, loc_out_fname)
