@@ -141,19 +141,25 @@ def find_closest(time, times):
             break
     return closest_it
 
-def calc_errors_time(positions1, times1, positions2, times2):
+def get_positions_time(positions1, times1, positions2, times2):
     max_dt = 0.1
-    errors = len(positions1)*[None]
+    tposs = np.zeros_like(positions1)
     for it in range(0, len(positions1)):
         time1 = times1[it]
         closest_it = find_closest(time1, times2)
         # sys.stdout.write("{:d}: {:f}s X {:f}s  :: ".format(it, time1, times2[closest_it]))
-        if abs(times2[closest_it] - time1) > max_dt or positions2[closest_it][1] > 6:
+        # if abs(times2[closest_it] - time1) > max_dt or positions2[closest_it][1] > 6:
+        if abs(times2[closest_it] - time1) > max_dt:
+            tposs[it, :] = np.array([np.nan, np.nan, np.nan])
             # print("FP")
             continue
         # print("TP")
-        errors[it] = np.linalg.norm(positions1[it, :] - positions2[closest_it, :])
-    return errors
+        tposs[it, :] = positions2[closest_it, :]
+    return tposs
+
+def calc_errors_time(positions1, tposs):
+    max_dt = 0.1
+    return np.linalg.norm(tposs-positions1, axis=1)
 
 def calc_errors(positions1, positions2):
     errors = np.linalg.norm(positions1 - positions2, axis=1)
@@ -215,6 +221,7 @@ def find_min_tf(positions, to_positions, FP_error, only_rot=False):
         dE = calc_avg_error_diff(rand_poss, to_positions, FP_error)
         dt = time.time() - t1
         print("avg. error diff [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}] (time: {:f}s)".format(dE[0], dE[1], dE[2], dE[3], dE[4], dE[5], dt))
+        print("cur tf [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}])".format(transf_tot[0], transf_tot[1], transf_tot[2], transf_tot[3], transf_tot[4], transf_tot[5]))
         transf = dE
         transf[0:3] *= lam_ang
         transf[3:6] *= lam_pos
@@ -245,7 +252,7 @@ def put_to_file(positions, times, fname):
 
 def put_tf_to_file(tf, fname):
     with open(fname, 'w') as ofhandle:
-        ofhandle.write("x,y,z,yaw,pitch,roll\n")
+        ofhandle.write("yaw,pitch,roll,x,y,z\n")
         ofhandle.write("{:f},{:f},{:f},{:f},{:f},{:f}\n".format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5]))
 
 def put_errs_to_file(dists, errors, fname):
@@ -254,8 +261,8 @@ def put_errs_to_file(dists, errors, fname):
         for it in range(0, len(dists)):
             ofhandle.write("{:f},{:f}\n".format(dists[it], errors[it]))
 
-def calc_statistics(positions1, times1, positions2, times2, FP_error):
-    errors = calc_errors_time(positions1, times1, positions2, times2)
+def calc_statistics(positions1, tposs, FP_error):
+    errors = calc_errors_time(positions1, tposs)
     TPs = 0
     TNs = 0
     FPs = 0
@@ -302,8 +309,8 @@ def main():
     TP_prob_out_fname = rospy.get_param('~TP_probability_out_fname')
 
     # msgs = load_pickle(in_fname)
-    # FP_error = 8.0 # meters
-    FP_error = float('Inf')
+    FP_error = 8.0 # meters
+    # FP_error = float('Inf')
 
     rosbag_skip_time = 0
     rosbag_skip_time_end = 0
@@ -393,7 +400,6 @@ def main():
         if tf_frombag:
             tf = find_min_tf(rot_pos, loc_pos, FP_error, only_rot=True)
         min_positions = transform_gt(rot_positions, tf)
-        put_tf_to_file(tf, tf_out_fname)
 
         loc_positions += zero_pos
         min_positions += zero_pos
@@ -401,14 +407,15 @@ def main():
         # min_positions = rot_positions
         gt_frombag = True
 
-        plt.plot(loc_positions[:, 0], loc_positions[:, 1], 'b')
-        plt.plot(min_positions[:, 0], min_positions[:, 1], 'r')
+        plt.grid()
+        plt.plot(loc_positions[:, 0], loc_positions[:, 1], 'bo')
+        plt.plot(min_positions[:, 0], min_positions[:, 1], 'rx')
         plt.show()
 
     rospy.loginfo("Loaded {:d} ground truth positions".format(len(min_positions)))
     
-    print("loc:", loc_times[0], loc_times[-1])
-    print("gt:", gt_times[0], gt_times[-1])
+    print("loc:", loc_times[0], loc_times[-1], loc_positions[0, :])
+    print("gt:", gt_times[0], gt_times[-1], min_positions[0, :])
 
     # #{ 
     
@@ -442,7 +449,7 @@ def main():
     # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
     # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.1, 0])
     if tf_frombag:
-        rospy.loginfo('Saving TF to CSV: {:s}'.format(tf_out_fname))
+        rospy.loginfo('Saving TF [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}] to CSV: {:s}'.format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5], tf_out_fname))
         put_tf_to_file(tf, tf_out_fname)
     if loc_frombag:
         rospy.loginfo('Saving localizations to CSV: {:s}'.format(loc_out_fname))
@@ -451,7 +458,8 @@ def main():
         rospy.loginfo('Saving ground truths to CSV: {:s}'.format(gt_out_fname))
         put_to_file(min_positions, gt_times, gt_out_fname)
 
-    TPs, TNs, FPs, FNs, errors = calc_statistics(min_positions, gt_times, loc_positions, loc_times, FP_error)
+    tposs = get_positions_time(min_positions, gt_times, loc_positions, loc_times)
+    TPs, TNs, FPs, FNs, errors = calc_statistics(min_positions, tposs, FP_error)
     rospy.loginfo("TPs, TNs, FPs, FNs: {:d}, {:d}, {:d}, {:d}".format(TPs, TNs, FPs, FNs))
 
     precision = TPs/float(TPs + FPs)
@@ -463,6 +471,7 @@ def main():
     TP_errors = errors[TP_mask]
     # TP_mask = np.ones((len(errors),), dtype=bool)
     dists = np.linalg.norm(min_positions, axis=1)
+    est_dists = np.linalg.norm(tposs[TP_mask], axis=1)
     TP_dists = dists[TP_mask]
     _, pos_hist_edges = np.histogram(dists, bins=20)
     pos_hist, _ = np.histogram(dists, bins=pos_hist_edges)
@@ -484,6 +493,14 @@ def main():
         high = err_avg_edges[it+1]
         idxs = np.logical_and(TP_dists > low, TP_dists < high)
         err_avg[it] = np.mean(TP_errors[idxs])
+
+    fig = plt.figure()
+    ax = fig.gca()
+    ax.set_aspect('equal')
+    plt.plot(TP_dists, est_dists, 'rx')
+    plt.plot(TP_dists, TP_dists, 'g')
+    plt.title("estimated distance over distance")
+    plt.show()
 
     plt.plot(err_avg_centers, err_avg, 'r')
     plt.plot(pos_hist_centers, TP_probs, 'b')

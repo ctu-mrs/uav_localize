@@ -9,7 +9,7 @@
   <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190215"/>
   <!-- <arg name="loc_bag" default="depth_dets_locs.bag"/> -->
   <!-- <arg name="loc_bag" default="dets_locs1.bag"/> -->
-  <arg name="loc_bag" default="cnn_dets_locs.bag"/>
+  <arg name="loc_bag" default="cnn_dets_locs2.bag"/>
   <!-- <arg name="gt_bag" default="target/_2019-02-21-09-56-01.bag"/> -->
   <!-- <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/_2019-02-15-10-27-06.bag"/> -->
   <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/gt_odom.bag"/>
