@@ -95,6 +95,36 @@ std::string to_str_prec(double num, unsigned prec = 3)
   return strstr.str();
 }
 
+cv::Mat color_if_depthmap(cv::Mat img, const std::string& encoding)
+{
+  /* static float max_depth = -1; */
+  if (encoding == "mono16")
+  {
+    cv::Mat dm_im_colormapped;
+    double min = 0;
+    double max = 40000;
+    cv::Mat unknown_pixels;
+    cv::compare(img, 65535, unknown_pixels, cv::CMP_EQ);
+    /* cv::minMaxIdx(img, &min, &max, nullptr, nullptr, ~unknown_pixels); */
+    /* if (max_depth == -1) */
+    /*   max_depth = max; */
+    /* else */
+    /*   max_depth = 0.99*max_depth + 0.01*max; */
+    /* max = max_depth; */
+    cv::Mat im_8UC1;
+    img.convertTo(im_8UC1, CV_8UC1, 255.0 / (max-min), -min * 255.0 / (max-min)); 
+    applyColorMap(im_8UC1, dm_im_colormapped, cv::COLORMAP_JET);
+    cv::Mat blackness = cv::Mat::zeros(dm_im_colormapped.size(), dm_im_colormapped.type());
+    blackness.copyTo(dm_im_colormapped, unknown_pixels);
+    return dm_im_colormapped;
+  } else
+  {
+    cv::Mat im_8UC3;
+    cv::cvtColor(img, im_8UC3, cv::COLOR_GRAY2BGR);
+    return im_8UC3;
+  }
+}
+
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "backproject_display_node");
@@ -168,7 +198,8 @@ int main(int argc, char** argv)
 
       string filename = "./backproject_output.avi";             // name of the output video file
       ROS_INFO("[%s]: Initializing video writer to file %s", ros::this_node::getName().c_str(), filename.c_str());
-      int codec = CV_FOURCC('M', 'J', 'P', 'G');  // select desired codec (must be available at runtime)
+      int codec = CV_FOURCC('F', 'F', 'V', '1');  // select desired codec (must be available at runtime)
+      /* int codec = -1; */
       double fps = 25.0;                          // framerate of the created video stream
       cv::Size vid_size(camera_model.cameraInfo().width, camera_model.cameraInfo().height);
       writer.open(filename, codec, fps, vid_size, true);
@@ -232,8 +263,8 @@ int main(int argc, char** argv)
           continue;
         }
 
-        const cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, "bgr8");
-        img = img_ros2->image;
+        const cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, img_ros->encoding);
+        img = color_if_depthmap(img_ros2->image, img_ros->encoding);
 
         for (const auto& hyp_msg : hyps_msg.hypotheses)
         {
@@ -308,8 +339,8 @@ int main(int argc, char** argv)
       } else // if (sh_hyps->new_data())
       {
         sensor_msgs::ImageConstPtr img_ros = img_buffer.back();
-        cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, "bgr8");
-        img = img_ros2->image;
+        cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, img_ros->encoding);
+        img = color_if_depthmap(img_ros2->image, img_ros->encoding);
       }
 
       const string state = eliminating ? "locked, firing net" : "detected, intercepting";
