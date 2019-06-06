@@ -1,5 +1,7 @@
 <sdf version='1.6'>
   <world name='default'>
+    <!-- <plugin name="mrs_gazebo_ros_link_attacher_plugin" filename="libmrs_gazebo_ros_link_attacher.so"/> -->
+    <plugin name="mrs_gazebo_static_transform_republisher_plugin" filename="libmrs_gazebo_static_transform_republisher.so"/>
     <spherical_coordinates>
       <surface_model>EARTH_WGS84</surface_model>
       <latitude_deg>37.4118</latitude_deg>
