@@ -752,6 +752,8 @@ namespace uav_localize
               msg->pose.covariance[r * 6 + c] = covariance(r, c);
             else if (r == c)
               msg->pose.covariance[r * 6 + c] = 666;
+            else
+              msg->pose.covariance[r * 6 + c] = 0.0;
           }
         }
       }
