@@ -614,7 +614,7 @@ namespace uav_localize
       const double sin_ab = v.norm();                 // sine of the angle between 'a' and the position vector
       const double cos_ab = a.dot(b);                 // cosine of the angle between 'a' and the position vector
       const double angle = atan2(sin_ab, cos_ab);     // the desired rotation angle
-      const Eigen::Matrix3d vec_rot = Eigen::AngleAxisd(angle, v).toRotationMatrix();
+      const Eigen::Matrix3d vec_rot = Eigen::AngleAxisd(angle, v.normalized()).toRotationMatrix();
       pos_cov = rotate_covariance(pos_cov, vec_rot);  // rotate the covariance to point in direction of est. position
       //}
 
