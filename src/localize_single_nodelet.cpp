@@ -586,38 +586,38 @@ namespace uav_localize
     //}
 
     /* calc_position_covariance() method //{ */
-    /* position_sf is position of the detection in 3D in the frame of the sensor (camera) */
+    /* Calculates the corresponding covariance matrix of the estimated 3D position.
+     * The covariance is first constructed so that it has standard deviation 'xy_covariance_coeff'
+     * in the x and y directions and 'z_covariance_coeff' scaled by the distance in the z direction.
+     * Then it is rotated so that the former z direction of the covariance ellipsoid points in
+     * the direction of the measurement 'position_sf'.
+     * 'position_sf' is position of the detection in 3D in the frame of the sensor (camera).
+     * */
     static Eigen::Matrix3d calc_position_covariance(const Eigen::Vector3d& position_sf, const double xy_covariance_coeff, const double z_covariance_coeff)
     {
-      /* Calculates the corresponding covariance matrix of the estimated 3D position */
-      Eigen::Matrix3d pos_cov = Eigen::Matrix3d::Identity();  // prepare the covariance matrix
-      const double tol = 1e-9;
+      Eigen::Matrix3d pos_cov;
+      /* Prepare the covariance matrix according to the supplied parameters //{ */
+      pos_cov = Eigen::Matrix3d::Identity();
       pos_cov(0, 0) = pos_cov(1, 1) = xy_covariance_coeff;
-
+      // the z coefficient is scaled according to the distance of the measurement d^1.5
       pos_cov(2, 2) = position_sf(2) * sqrt(position_sf(2)) * z_covariance_coeff;
+      // however, there is a lower limit to the covariance
       if (pos_cov(2, 2) < 0.33 * z_covariance_coeff)
         pos_cov(2, 2) = 0.33 * z_covariance_coeff;
+      //}
 
-      // Find the rotation matrix to rotate the covariance to point in the direction of the estimated position
+      /* Rotate the covariance matri so that it points its z axis towards the measurement position //{ */
+      // Prepare some helper vectors and variables
       const Eigen::Vector3d a(0.0, 0.0, 1.0);
       const Eigen::Vector3d b = position_sf.normalized();
-      const Eigen::Vector3d v = a.cross(b);
-      const double sin_ab = v.norm();
-      const double cos_ab = a.dot(b);
-      Eigen::Matrix3d vec_rot = Eigen::Matrix3d::Identity();
-      if (sin_ab < tol)  // unprobable, but possible - then it is identity or 180deg
-      {
-        if (cos_ab + 1.0 < tol)  // that would be 180deg
-        {
-          vec_rot << -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0;
-        }     // otherwise its identity
-      } else  // otherwise just construct the matrix
-      {
-        Eigen::Matrix3d v_x;
-        v_x << 0.0, -v(2), v(1), v(2), 0.0, -v(0), -v(1), v(0), 0.0;
-        vec_rot = Eigen::Matrix3d::Identity() + v_x + (1 - cos_ab) / (sin_ab * sin_ab) * (v_x * v_x);
-      }
+      const Eigen::Vector3d v = a.cross(b);           // the axis of rotation
+      const double sin_ab = v.norm();                 // sine of the angle between 'a' and the position vector
+      const double cos_ab = a.dot(b);                 // cosine of the angle between 'a' and the position vector
+      const double angle = atan2(sin_ab, cos_ab);     // the desired rotation angle
+      const Eigen::Matrix3d vec_rot = Eigen::AngleAxisd(angle, v).toRotationMatrix();
       pos_cov = rotate_covariance(pos_cov, vec_rot);  // rotate the covariance to point in direction of est. position
+      //}
+
       return pos_cov;
     }
     //}
