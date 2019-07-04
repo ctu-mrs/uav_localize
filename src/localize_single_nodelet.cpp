@@ -600,7 +600,7 @@ namespace uav_localize
       pos_cov = Eigen::Matrix3d::Identity();
       pos_cov(0, 0) = pos_cov(1, 1) = xy_covariance_coeff;
       // the z coefficient is scaled according to the distance of the measurement d^1.5
-      pos_cov(2, 2) = position_sf(2) * sqrt(position_sf(2)) * z_covariance_coeff;
+      pos_cov(2, 2) = position_sf(2) * sqrt(abs(position_sf(2))) * z_covariance_coeff;
       // however, there is a lower limit to the covariance
       if (pos_cov(2, 2) < 0.33 * z_covariance_coeff)
         pos_cov(2, 2) = 0.33 * z_covariance_coeff;
