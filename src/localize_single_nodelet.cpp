@@ -50,30 +50,9 @@ namespace uav_localize
 
       // LOAD DYNAMIC PARAMETERS
       m_drmgr_ptr = make_unique<drmgr_t>(nh, m_node_name);
-      /* drmgr.map_param("xy_covariance_coeff", m_xy_covariance_coeff); */
-      /* drmgr.map_param("z_covariance_coeff", m_z_covariance_coeff); */
-      /* drmgr.map_param("max_update_divergence", m_max_update_divergence); */
-      /* drmgr.map_param("max_lkf_uncertainty", m_max_lkf_uncertainty); */
-      /* drmgr.map_param("lkf_process_noise_vel", m_lkf_process_noise_vel); */
-      /* drmgr.map_param("lkf_process_noise_pos", m_lkf_process_noise_pos); */
-      /* drmgr.map_param("init_vel_cov", m_init_vel_cov); */
-      /* drmgr.map_param("min_corrs_to_consider", m_min_corrs_to_consider); */
-      /* DAMN THE UNFINISHED ROS DYNAMIC RECONFIGURE!!! //{ */
-      uav_localize::LocalizationParamsConfig cfg = m_drmgr_ptr->config;
-      m_drmgr_ptr->load_param("depth_detections/xy_covariance_coeff", cfg.depth_detections__xy_covariance_coeff);
-      m_drmgr_ptr->load_param("depth_detections/z_covariance_coeff", cfg.depth_detections__z_covariance_coeff);
-      m_drmgr_ptr->load_param("depth_detections/max_gating_distance", cfg.depth_detections__max_gating_distance);
-      m_drmgr_ptr->load_param("rgb_trackings/xy_covariance_coeff", cfg.rgb_trackings__xy_covariance_coeff);
-      m_drmgr_ptr->load_param("rgb_trackings/z_covariance_coeff", cfg.rgb_trackings__z_covariance_coeff);
-      m_drmgr_ptr->load_param("rgb_trackings/max_gating_distance", cfg.rgb_trackings__max_gating_distance);
-      m_drmgr_ptr->update_config(cfg);
-      //}
       if (!m_drmgr_ptr->loaded_successfully())
       {
         NODELET_ERROR("[LocalizeSingle]: Some default values of dynamically reconfigurable parameters were not loaded successfully, ending the node:");
-        std::vector<std::string> to_init = m_drmgr_ptr->to_init();
-        for (const auto& name : to_init)
-          NODELET_ERROR("%s", name.c_str());
         ros::shutdown();
       }
       

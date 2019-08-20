@@ -1,3 +1,4 @@
+<?xml version="1.0" ?>
 <sdf version='1.6'>
   <world name='default'>
     <!-- <plugin name="mrs_gazebo_ros_link_attacher_plugin" filename="libmrs_gazebo_ros_link_attacher.so"/> -->
@@ -13,8 +14,8 @@
       <ode>
         <solver>
           <type>quick</type>
-          <iters>50</iters>
-          <sor>1</sor>
+          <iters>10</iters>
+          <sor>1.3</sor>
           <use_dynamic_moi_rescaling>0</use_dynamic_moi_rescaling>
         </solver>
         <constraints>
@@ -24,9 +25,10 @@
           <contact_surface_layer>0.001</contact_surface_layer>
         </constraints>
       </ode>
-      <max_step_size>0.002</max_step_size>
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>500</real_time_update_rate>
+      <real_time_update_rate>250</real_time_update_rate>
+      <magnetic_field>6.0e-06 2.3e-05 -4.2e-05</magnetic_field>
     </physics>
     <scene>
       <shadows>0</shadows>
