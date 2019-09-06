@@ -35,6 +35,7 @@ struct Source {int id; std::string name;};
 static const std::vector<Source> possible_sources =
 {
   {uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION, "depth detection"},
+  {uav_localize::LocalizationHypothesis::SOURCE_CNN_DETECTION, "CNN detection"},
   {uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING, "RGB tracking"},
   {uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION, "LKF prediction"},
 };
@@ -117,11 +118,19 @@ cv::Mat color_if_depthmap(cv::Mat img, const std::string& encoding)
     cv::Mat blackness = cv::Mat::zeros(dm_im_colormapped.size(), dm_im_colormapped.type());
     blackness.copyTo(dm_im_colormapped, unknown_pixels);
     return dm_im_colormapped;
-  } else
+  } else if (encoding == "mono8")
   {
     cv::Mat im_8UC3;
     cv::cvtColor(img, im_8UC3, cv::COLOR_GRAY2BGR);
     return im_8UC3;
+  } else if (encoding == "rgb8")
+  {
+    cv::Mat im_bgr;
+    cv::cvtColor(img, im_bgr, cv::COLOR_RGB2BGR);
+    return im_bgr;
+  } else
+  {
+    return img;
   }
 }
 
@@ -154,11 +163,11 @@ int main(int argc, char** argv)
 
   mrs_lib::SubscribeMgr smgr(nh, "backprojection_node");
   const bool subs_time_consistent = false;
-  sh_hyps = smgr.create_handler_threadsafe<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_dets = smgr.create_handler_threadsafe<uav_detect::Detections>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr, subs_time_consistent>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_cinfo = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_fire = smgr.create_handler_threadsafe<std_msgs::Bool>("fire_topic", 1, ros::TransportHints().tcpNoDelay(), mrs_lib::no_timeout);
+  sh_hyps = smgr.create_handler<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", ros::Duration(5.0));
+  sh_dets = smgr.create_handler<uav_detect::Detections>("detections", ros::Duration(5.0));
+  sh_img = smgr.create_handler<sensor_msgs::ImageConstPtr, subs_time_consistent>("image_rect", ros::Duration(5.0));
+  sh_cinfo = smgr.create_handler<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", ros::Duration(5.0));
+  sh_fire = smgr.create_handler<std_msgs::Bool>("fire_topic", mrs_lib::no_timeout);
 
   tf2_ros::Buffer tf_buffer;
   tf2_ros::TransformListener tf_listener(tf_buffer);

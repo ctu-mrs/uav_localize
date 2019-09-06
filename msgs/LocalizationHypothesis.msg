@@ -10,3 +10,4 @@ time                  last_correction_stamp
 uint8                 SOURCE_DEPTH_DETECTION=0
 uint8                 SOURCE_RGB_TRACKING=1
 uint8                 SOURCE_LKF_PREDICTION=2
+uint8                 SOURCE_CNN_DETECTION=3

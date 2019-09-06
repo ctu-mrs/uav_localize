@@ -19,10 +19,11 @@
 
 #include <list>
 
+#include <cnn_detect/Detections.h>
 #include <uav_detect/Detections.h>
 #include <uav_track/Trackings.h>
 #include <mrs_lib/ParamLoader.h>
 #include <mrs_lib/DynamicReconfigureMgr.h>
-#include <mrs_lib/SubscribeHandler.h>
+#include <mrs_lib/subscribe_handler.h>
 
 #endif //  MAIN_H

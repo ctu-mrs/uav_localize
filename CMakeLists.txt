@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_lib
   nodelet
   uav_detect
+  cnn_detect
   uav_track
 )
 

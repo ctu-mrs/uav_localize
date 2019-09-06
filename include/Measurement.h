@@ -12,6 +12,7 @@ namespace uav_localize
     enum source_t
     {
       depth_detection = uav_localize::LocalizationHypothesis::SOURCE_DEPTH_DETECTION,
+      cnn_detection = uav_localize::LocalizationHypothesis::SOURCE_CNN_DETECTION,
       rgb_tracking    = uav_localize::LocalizationHypothesis::SOURCE_RGB_TRACKING,
       lkf_prediction  = uav_localize::LocalizationHypothesis::SOURCE_LKF_PREDICTION
     };
@@ -19,7 +20,7 @@ namespace uav_localize
   public:
     bool reliable() const
     {
-      return source == source_t::depth_detection;
+      return source == source_t::depth_detection || source == source_t::cnn_detection;
     }
 
     std::string source_name() const
@@ -29,6 +30,9 @@ namespace uav_localize
       {
         case depth_detection:
           ret = "uav_detect::Detections";
+          break;
+        case cnn_detection:
+          ret = "cnn_detect::Detections";
           break;
         case rgb_tracking:
           ret = "uav_track::Trackings";
