@@ -6,36 +6,32 @@
   <arg unless="$(arg debug)" name="launch_prefix" value=""/>
   <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
 
-  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/eagle/cisarak_20190215"/>
+  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/uav_detect/icra2019"/>
   <!-- <arg name="loc_bag" default="depth_dets_locs.bag"/> -->
   <!-- <arg name="loc_bag" default="dets_locs1.bag"/> -->
-  <arg name="loc_bag" default="cnn_dets_locs2.bag"/>
+  <arg name="loc_bag" default="out/localizations_both.bag"/>
   <!-- <arg name="gt_bag" default="target/_2019-02-21-09-56-01.bag"/> -->
   <!-- <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/_2019-02-15-10-27-06.bag"/> -->
-  <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/gt_odom.bag"/>
+  <arg name="gt_bag" default="out/odoms.bag"/>
   <!-- <arg name="skip_time" default="0"/> -->
   <!-- <arg name="delay_time" default="2"/> -->
   <!-- <arg name="rate_publish" default="1.0"/> -->
   <!-- <node name="rosbag_play" pkg="rosbag" type="play" args="$(arg bags_base_path)/$(arg bag_inputs) -/-clock -s $(arg skip_time) -d $(arg delay_time) -r $(arg rate_publish)" /> -->
 
-  <arg name="localization_topic" default="/uav81/uav_localization/localized_uav"/>
+  <arg name="localization_topic" default="/uav42/uav_localization/localized_uav"/>
   <!-- <arg name="localization_topic" default="/uav81/uav_localization/dbg_measurements_pcl"/> -->
-  <arg name="ground_truth_topic" default="/uav3/odometry/odom_main"/>
+  <arg name="ground_truth_topic" default="/uav4/odometry/rtk_local_odom"/>
   <!-- <node name="localization_evaluation" pkg="uav_localize" type="evaluator_det.py" output="screen" launch-prefix="$(arg launch_prefix)"> -->
   <node name="localization_evaluation" pkg="uav_localize" type="evaluator.py" output="screen" launch-prefix="$(arg launch_prefix)">
     <param name="localization_bag_name" value="$(arg bags_base_path)/$(arg loc_bag)" />
     <param name="ground_truth_bag_name" value="$(arg bags_base_path)/$(arg gt_bag)" />
     <param name="localization_topic_name" value="$(arg localization_topic)" />
     <param name="ground_truth_topic_name" value="$(arg ground_truth_topic)" />
-    <param name="localization_out_fname2" value="$(find uav_localize)/output/dataset1/loc_out.csv" />
-    <param name="ground_truth_out_fname2" value="$(find uav_localize)/output/dataset1/gt_out.csv" />
-    <param name="localization_out_fname3" value="$(find uav_localize)/output/loc_out.csv" />
-    <param name="ground_truth_out_fname3" value="$(find uav_localize)/output/gt_out.csv" />
-    <param name="localization_out_fname" value="$(find uav_localize)/output/cnn/loc_out.csv" />
-    <param name="ground_truth_out_fname" value="$(find uav_localize)/output/cnn/gt_out.csv" />
-    <param name="tf_out_fname" value="$(find uav_localize)/output/tf_out.csv" />
-    <param name="distance_error_out_fname" value="$(find uav_localize)/output/dist_err_out.csv" />
-    <param name="TP_probability_out_fname" value="$(find uav_localize)/output/TP_prob_out.csv" />
+    <param name="localization_out_fname" value="$(find cnn_detect)/output/depth/loc_out.csv" />
+    <param name="ground_truth_out_fname" value="$(find cnn_detect)/output/depth/gt_out.csv" />
+    <param name="tf_out_fname" value="$(find cnn_detect)/output/tf_out.csv" />
+    <param name="distance_error_out_fname" value="$(find cnn_detect)/output/dist_err_out.csv" />
+    <param name="TP_probability_out_fname" value="$(find cnn_detect)/output/TP_prob_out.csv" />
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
   </node>
 

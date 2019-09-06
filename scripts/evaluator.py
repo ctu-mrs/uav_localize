@@ -312,8 +312,8 @@ def main():
     FP_error = 8.0 # meters
     # FP_error = float('Inf')
 
-    rosbag_skip_time = 0
-    rosbag_skip_time_end = 0
+    rosbag_skip_time = 70
+    rosbag_skip_time_end = 90
 
     if os.path.isfile(tf_out_fname):
         rospy.loginfo("File {:s} found, loading it".format(tf_out_fname))
@@ -388,28 +388,35 @@ def main():
         # loc_positions = transform_gt(loc_positions, [1.57, 3.14, 1.57, 0, 0, 0], inverse=True)
         # rot_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
         # rot_positions = transform_gt(gt_positions, [0, 0.06, 0, 0, 0, 0])
-        zero_pos = loc_positions[0, :]
-        loc_positions = loc_positions - zero_pos
-        rot_positions = gt_positions
-        rot_positions = rot_positions - rot_positions[0, :]
-        # Find the transformed positions of GT which minimize RMSE with the localization
-        loc_positions_time_aligned = time_align(gt_times, loc_positions, loc_times)
-        nnons = ~np.isnan(loc_positions_time_aligned[:, 0])
-        loc_pos = loc_positions_time_aligned[nnons, :]
-        rot_pos = rot_positions[nnons, :]
-        if tf_frombag:
-            tf = find_min_tf(rot_pos, loc_pos, FP_error, only_rot=True)
-        min_positions = transform_gt(rot_positions, tf)
 
-        loc_positions += zero_pos
-        min_positions += zero_pos
+        min_positions = None
+
+        if tf_frombag:
+            zero_pos = loc_positions[0, :]
+            loc_positions = loc_positions - zero_pos
+            gt_positions = gt_positions - gt_positions[0, :]
+            # Find the transformed positions of GT which minimize RMSE with the localization
+            loc_positions_time_aligned = time_align(gt_times, loc_positions, loc_times)
+            nnons = ~np.isnan(loc_positions_time_aligned[:, 0])
+            loc_pos = loc_positions_time_aligned[nnons, :]
+            gt_pos = gt_positions[nnons, :]
+            tf = find_min_tf(gt_pos, loc_pos, FP_error, only_rot=False)
+            tf[3:6] += zero_pos
+            min_positions = transform_gt(gt_positions, tf)
+            loc_positions += zero_pos
+        else:
+            # min_positions = transform_gt(gt_positions, tf)
+            min_positions = gt_positions
+
         # min_positions = min_positions - min_positions[0, :] + loc_positions[0, :]
         # min_positions = rot_positions
         gt_frombag = True
 
-        plt.grid()
-        plt.plot(loc_positions[:, 0], loc_positions[:, 1], 'bo')
-        plt.plot(min_positions[:, 0], min_positions[:, 1], 'rx')
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.grid()
+        ax.plot(loc_positions[:, 0], loc_positions[:, 1], loc_positions[:, 2], 'bo')
+        ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'rx')
         plt.show()
 
     rospy.loginfo("Loaded {:d} ground truth positions".format(len(min_positions)))
@@ -494,21 +501,21 @@ def main():
         idxs = np.logical_and(TP_dists > low, TP_dists < high)
         err_avg[it] = np.mean(TP_errors[idxs])
 
-    fig = plt.figure()
-    ax = fig.gca()
-    ax.set_aspect('equal')
-    plt.plot(TP_dists, est_dists, 'rx')
-    plt.plot(TP_dists, TP_dists, 'g')
-    plt.title("estimated distance over distance")
-    plt.show()
+    # fig = plt.figure()
+    # ax = fig.gca()
+    # ax.set_aspect('equal')
+    # plt.plot(TP_dists, est_dists, 'rx')
+    # plt.plot(TP_dists, TP_dists, 'g')
+    # plt.title("estimated distance over distance")
+    # plt.show()
 
-    plt.plot(err_avg_centers, err_avg, 'r')
-    plt.plot(pos_hist_centers, TP_probs, 'b')
-    # plt.plot(pos_hist_centers, TP_hist, 'g.')
-    # plt.plot(pos_hist_centers, pos_hist, '.')
-    plt.show()
-    put_errs_to_file(err_avg_centers, err_avg, dist_err_out_fname)
-    put_errs_to_file(pos_hist_centers, TP_probs, TP_prob_out_fname)
+    # plt.plot(err_avg_centers, err_avg, 'r')
+    # plt.plot(pos_hist_centers, TP_probs, 'b')
+    # # plt.plot(pos_hist_centers, TP_hist, 'g.')
+    # # plt.plot(pos_hist_centers, pos_hist, '.')
+    # plt.show()
+    # put_errs_to_file(err_avg_centers, err_avg, dist_err_out_fname)
+    # put_errs_to_file(pos_hist_centers, TP_probs, TP_prob_out_fname)
 
     # # n_FPs = np.sum(np.isnan(errors))
     # # print(n_FPs)
