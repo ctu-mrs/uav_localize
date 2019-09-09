@@ -221,6 +221,7 @@ namespace uav_localize
       if (most_certain_hyp != nullptr)
       {
         geometry_msgs::PoseWithCovarianceStampedConstPtr msg = create_message(*most_certain_hyp, stamp);
+        m_tf_buffer.transform(*msg, *msg, "rs_d435_color_optical_frame", ros::Duration(0.01));
         m_pub_localized_uav.publish(msg);
       }
       //}
