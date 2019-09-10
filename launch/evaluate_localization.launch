@@ -9,7 +9,7 @@
   <arg name="bags_base_path" default="/home/$(env USER)/bag_files/uav_detect/icra2019"/>
   <!-- <arg name="loc_bag" default="depth_dets_locs.bag"/> -->
   <!-- <arg name="loc_bag" default="dets_locs1.bag"/> -->
-  <arg name="loc_bag" default="out/localizations_both.bag"/>
+  <arg name="loc_bag" default="out/localizations_cnn.bag"/>
   <!-- <arg name="gt_bag" default="target/_2019-02-21-09-56-01.bag"/> -->
   <!-- <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/_2019-02-15-10-27-06.bag"/> -->
   <arg name="gt_bag" default="out/odoms.bag"/>
@@ -27,8 +27,8 @@
     <param name="ground_truth_bag_name" value="$(arg bags_base_path)/$(arg gt_bag)" />
     <param name="localization_topic_name" value="$(arg localization_topic)" />
     <param name="ground_truth_topic_name" value="$(arg ground_truth_topic)" />
-    <param name="localization_out_fname" value="$(find cnn_detect)/output/both/loc_out.csv" />
-    <param name="ground_truth_out_fname" value="$(find cnn_detect)/output/both/gt_out.csv" />
+    <param name="localization_out_fname" value="$(find cnn_detect)/output/cnn/loc_out.csv" />
+    <param name="ground_truth_out_fname" value="$(find cnn_detect)/output/cnn/gt_out.csv" />
     <param name="tf_out_fname" value="$(find cnn_detect)/output/tf_out.csv" />
     <param name="distance_error_out_fname" value="$(find cnn_detect)/output/dist_err_out.csv" />
     <param name="TP_probability_out_fname" value="$(find cnn_detect)/output/TP_prob_out.csv" />

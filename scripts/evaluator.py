@@ -331,8 +331,8 @@ def main():
     FP_error = 8.0 # meters
     # FP_error = float('Inf')
 
-    rosbag_skip_time = 70
-    rosbag_skip_time_end = 90
+    rosbag_skip_time = 35
+    rosbag_skip_time_end = 65
 
     if os.path.isfile(tf_out_fname):
         rospy.loginfo("File {:s} found, loading it".format(tf_out_fname))
@@ -343,7 +343,7 @@ def main():
         tf_frombag = True
 
     bag = rosbag.Bag(loc_bag_fname)
-    start_time = 1567515863.202346
+    # start_time = 1567515863.202346
     if os.path.isfile(loc_out_fname):
         rospy.loginfo("File {:s} found, loading it".format(loc_out_fname))
         loc_positions, loc_times = load_csv_data(loc_out_fname)
@@ -394,18 +394,21 @@ def main():
         if gt_msgs is None:
             exit(1)
 
-        # start_time = loc_times[0]
+        start_time = loc_times[0]
         end_time = loc_times[-1]
-        # print("loc:", start_time, end_time)
+        print("loc:", start_time, end_time)
+        print("gt:", gt_msgs[0].header.stamp.to_sec(), gt_msgs[-1].header.stamp.to_sec())
         gt_msgs = cut_from(gt_msgs, rospy.Time.from_sec(start_time))
         gt_msgs = cut_to(gt_msgs, rospy.Time.from_sec(end_time))
+        print("loc:", start_time, end_time)
+        print("gt:", gt_msgs[0].header.stamp.to_sec(), gt_msgs[-1].header.stamp.to_sec())
 
         gt_positions = msgs_to_pos(gt_msgs)
         gt_times = msgs_to_times(gt_msgs)
         gt_idxs = np.argsort(gt_times)
         gt_positions = gt_positions[gt_idxs]
         gt_times = gt_times[gt_idxs]
-        rospy.logwarn("filtering GT positions")
+        # rospy.logwarn("filtering GT positions")
 
         # plt.plot(gt_times - start_time, gt_positions[:, 2], 'rx')
         # gt_positions = filter_gt_pos(gt_positions)
