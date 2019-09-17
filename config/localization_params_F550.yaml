@@ -6,7 +6,7 @@ min_detection_height: 1.0  # meters above zero altitude
 # Covariance parameters, applied to depth detection measurements
 depth_detections:
   # Covariance of the detection measurement in the XY direction (in camera CS)
-  xy_covariance_coeff: 0.3
+  xy_covariance_coeff: 0.1
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
   z_covariance_coeff: 0.3
@@ -19,13 +19,13 @@ depth_detections:
 # Covariance parameters, applied to CNN detection measurements
 cnn_detections:
   # Covariance of the detection measurement in the XY direction (in camera CS)
-  xy_covariance_coeff: 0.05
+  xy_covariance_coeff: 0.01
   # Covariance coefficient of the detection measurement in the Z direction (in camera CS)
   # This coefficient is scaled by z*sqrt(z) to obtain the resulting covariance in Z direction.
-  z_covariance_coeff: 1.0
+  z_covariance_coeff: 0.5
   # Maximal mahalanobis distance between a measurement and a hypothesis for the measurement
   # to be considered for association to the hypothesis
-  max_gating_distance: -7.0
+  max_gating_distance: -4.0
   # The measurement covariance will be inflated by this coefficient before applying the correction.
   cov_inflation_coeff: 1.0
 
@@ -38,15 +38,15 @@ rgb_trackings:
   z_covariance_coeff: 1.0
   # Maximal mahalanobis distance between a measurement and a hypothesis for the measurement
   # to be considered for association to the hypothesis
-  max_gating_distance: -10.0
+  max_gating_distance: -8.0
   # The measurement covariance will be inflated by this coefficient before applying the correction.
   cov_inflation_coeff: 1.0
 
 ## Prediction parameters
 # Process noise of the LKF position states
-lkf_process_noise_pos: 1.0  # it is scaled by dt in the code, so should it be given scaled to seconds here
+lkf_process_noise_pos: 0.8  # it is scaled by dt in the code, so should it be given scaled to seconds here
 # Process noise of the LKF velocity states
-lkf_process_noise_vel: 3.0  # it is scaled by dt in the code, so should it be given scaled to seconds here
+lkf_process_noise_vel: 2.0  # it is scaled by dt in the code, so should it be given scaled to seconds here
 
 ## other hypothesis parameters
 # If a hypothesis exceeds this uncertainty, it is kicked out of the pool of active LKFs.

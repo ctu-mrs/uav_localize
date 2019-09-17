@@ -221,7 +221,7 @@ namespace uav_localize
       if (most_certain_hyp != nullptr)
       {
         geometry_msgs::PoseWithCovarianceStampedConstPtr msg = create_message(*most_certain_hyp, stamp);
-        m_tf_buffer.transform(*msg, *msg, "rs_d435_color_optical_frame", ros::Duration(0.01));
+        /* m_tf_buffer.transform(*msg, *msg, "rs_d435_color_optical_frame", ros::Duration(0.01)); */
         m_pub_localized_uav.publish(msg);
       }
       //}
@@ -625,7 +625,7 @@ namespace uav_localize
     {
       try
       {
-        const ros::Duration timeout(1.0 / 100.0);
+        const ros::Duration timeout(1.0 / 10.0);
         geometry_msgs::TransformStamped transform;
         // Obtain transform from snesor into world frame
         transform = m_tf_buffer.lookupTransform(m_world_frame, frame_id, stamp, timeout);
