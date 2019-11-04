@@ -144,7 +144,7 @@ int main(int argc, char** argv)
 
   mrs_lib::SubscribeHandlerPtr<uav_localize::LocalizationHypotheses> sh_hyps;
   mrs_lib::SubscribeHandlerPtr<uav_detect::Detections> sh_dets;
-  mrs_lib::SubscribeHandlerPtr<sensor_msgs::ImageConstPtr> sh_img;
+  mrs_lib::SubscribeHandlerPtr<sensor_msgs::Image> sh_img;
   mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfo> sh_cinfo;
   mrs_lib::SubscribeHandlerPtr<std_msgs::Bool> sh_fire;
 
@@ -154,20 +154,14 @@ int main(int argc, char** argv)
 
   mrs_lib::SubscribeMgr smgr(nh, "backprojection_node");
   const bool subs_time_consistent = false;
-  sh_hyps = smgr.create_handler_threadsafe<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_dets = smgr.create_handler_threadsafe<uav_detect::Detections>("detections", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_img = smgr.create_handler_threadsafe<sensor_msgs::ImageConstPtr, subs_time_consistent>("image_rect", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_cinfo = smgr.create_handler_threadsafe<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", 1, ros::TransportHints().tcpNoDelay(), ros::Duration(5.0));
-  sh_fire = smgr.create_handler_threadsafe<std_msgs::Bool>("fire_topic", 1, ros::TransportHints().tcpNoDelay(), mrs_lib::no_timeout);
+  sh_hyps = smgr.create_handler<uav_localize::LocalizationHypotheses, subs_time_consistent>("dbg_hypotheses", ros::Duration(5.0));
+  sh_dets = smgr.create_handler<uav_detect::Detections>("detections", ros::Duration(5.0));
+  sh_img = smgr.create_handler<sensor_msgs::Image, subs_time_consistent>("image_rect", ros::Duration(5.0));
+  sh_cinfo = smgr.create_handler<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", ros::Duration(5.0));
+  sh_fire = smgr.create_handler<std_msgs::Bool>("fire_topic", ros::Duration(5.0));
 
   tf2_ros::Buffer tf_buffer;
   tf2_ros::TransformListener tf_listener(tf_buffer);
-
-  if (!smgr.loaded_successfully())
-  {
-    ROS_ERROR("Failed to subscribe some nodes");
-    ros::shutdown();
-  }
 
   print_options();
 
@@ -214,7 +208,7 @@ int main(int argc, char** argv)
     if (sh_img->new_data())
       add_to_buffer(sh_img->get_data(), img_buffer);
 
-    eliminating = eliminating || (sh_fire->has_data() && sh_fire->get_data().data);
+    eliminating = eliminating || (sh_fire->has_data() && sh_fire->get_data()->data);
     if (sh_img->has_data() && sh_cinfo->used_data())
     {
       ros::Time cur_img_t = sh_img->get_data()->header.stamp;
@@ -231,7 +225,7 @@ int main(int argc, char** argv)
       cv::Mat img;
       if (sh_dets->has_data())
       {
-        ros::Time cur_det_t = sh_dets->get_data().header.stamp;
+        ros::Time cur_det_t = sh_dets->get_data()->header.stamp;
         if (cur_det_t != prev_det_t)
         {
           const double cur_freq = 1.0/(cur_det_t - prev_det_t).toSec();
@@ -241,7 +235,7 @@ int main(int argc, char** argv)
       }
       if (sh_hyps->has_data())
       {
-        uav_localize::LocalizationHypotheses hyps_msg = sh_hyps->get_data();
+        uav_localize::LocalizationHypotheses hyps_msg = *sh_hyps->get_data();
         if (hyps_msg.main_hypothesis_id >= 0)
           last_valid_hypothesis_stamp = hyps_msg.header.stamp;
         const ros::Time cur_loc_t = hyps_msg.header.stamp;
