@@ -284,7 +284,7 @@ def put_tf_to_file(tf, fname):
 
 def put_errs_to_file(dists, errors, fname):
     with open(fname, 'w') as ofhandle:
-        ofhandle.write("error,distance\n")
+        ofhandle.write("error,speed\n")
         for it in range(0, len(dists)):
             ofhandle.write("{:f},{:f}\n".format(dists[it], errors[it]))
 
@@ -538,14 +538,6 @@ def main():
 
     if gt_frombag:
         subtract(min_positions, gt_times, obs_positions, obs_times)
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.grid()
-    ax.plot(loc_positions[:, 0], loc_positions[:, 1], loc_positions[:, 2], 'bo')
-    ax.plot(obs_positions[:, 0], obs_positions[:, 1], obs_positions[:, 2], 'gx')
-    ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'rx')
-    plt.show()
 
     # rot_pos = tf[6:9]
     # tf_tmp = tf[0:6]
@@ -584,6 +576,19 @@ def main():
     recall = TPs/float(TPs + FNs)
     rospy.loginfo("precision, recall: {:f}, {:f}".format(precision, recall))
 
+    dt = np.mean(np.diff(gt_times))
+    print("average dt: {}".format(dt))
+    dposs = np.linalg.norm(np.diff(min_positions, axis=0), axis=1)
+    speeds = dposs/dt
+    speeds[speeds > 4.2] = np.nan
+    speeds = np.append(speeds, np.array((np.nan)))
+    # plt.plot(gt_times, speeds)
+    # plt.title("speeds")
+    # plt.xlabel("time (s)")
+    # plt.ylabel("speed (m/s)")
+    # plt.show()
+
+
     # error_over_distance = error/min_positions[:, 2]
     TP_mask = errors < FP_error
     TP_mask = np.logical_and(TP_mask, tposs[:, 0] < 6.0)
@@ -592,7 +597,7 @@ def main():
     # TP_mask = np.ones((len(errors),), dtype=bool)
     dists = np.linalg.norm(min_positions, axis=1)
     est_dists = np.linalg.norm(tposs[TP_mask], axis=1)
-    TP_dists = dists[TP_mask]
+    TP_speeds = speeds[TP_mask]
     # _, pos_hist_edges = np.histogram(dists, bins=20)
     # pos_hist, _ = np.histogram(dists, bins=pos_hist_edges)
     # pos_hist = np.array(pos_hist, dtype=float)
@@ -605,14 +610,17 @@ def main():
     # # dist = np.linspace(np.min(dists), np.max(dists), len(errors))
 
     # dists = dists[dists <= 18.0]
-    _, err_avg_edges = np.histogram(dists, bins=15)
+    speeds_nn = speeds[~np.isnan(speeds)]
+    _, err_avg_edges = np.histogram(speeds_nn, bins=18)
     err_bin_width = err_avg_edges[1] - err_avg_edges[0]
     err_avg_centers = err_avg_edges[0:-1] + err_bin_width/2
     err_avg = len(err_avg_centers)*[None]
+    print(err_avg_edges)
     for it in range(0, len(err_avg_edges)-1):
         low = err_avg_edges[it]
         high = err_avg_edges[it+1]
-        idxs = np.logical_and(TP_dists > low, TP_dists < high)
+        print(low, high)
+        idxs = np.logical_and(TP_speeds > low, TP_speeds < high)
         err_avg[it] = np.mean(TP_errors[idxs])
 
     # fig = plt.figure()
@@ -630,7 +638,9 @@ def main():
     # plt.plot(TP_dists, TP_errors, 'g.')
     # # plt.plot(pos_hist_centers, TP_hist, 'g.')
     # # plt.plot(pos_hist_centers, pos_hist, '.')
-    plt.title("Localization error over distance")
+    plt.title("Localization error over speed")
+    plt.xlabel("speed (m/s)")
+    plt.ylabel("RMSE (m)")
     plt.show()
     put_errs_to_file(err_avg_centers, err_avg, dist_err_out_fname)
     # put_errs_to_file(pos_hist_centers, TP_probs, TP_prob_out_fname)
@@ -661,3 +671,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

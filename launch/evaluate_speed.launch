@@ -9,7 +9,7 @@
   <arg name="bags_base_path" default="/home/$(env USER)/bag_files/uav_detect/icra2019"/>
   <!-- <arg name="loc_bag" default="depth_dets_locs.bag"/> -->
   <!-- <arg name="loc_bag" default="dets_locs1.bag"/> -->
-  <arg name="loc_bag" default="out/localizations_depth_corrected.bag"/>
+  <arg name="loc_bag" default="out/localizations_both_corrected.bag"/>
   <!-- <arg name="gt_bag" default="target/_2019-02-21-09-56-01.bag"/> -->
   <!-- <arg name="gt_bag" default="90_2019_02_15_10_25_54_matous_eagle_2/_2019-02-15-10-27-06.bag"/> -->
   <arg name="gt_bag" default="out/odoms.bag"/>
@@ -23,7 +23,7 @@
   <arg name="observer_ground_truth_topic" default="/uav42/odometry/rtk_local_odom"/>
   <arg name="ground_truth_topic" default="/uav4/odometry/rtk_local_odom"/>
   <!-- <node name="localization_evaluation" pkg="uav_localize" type="evaluator_det.py" output="screen" launch-prefix="$(arg launch_prefix)"> -->
-  <node name="localization_evaluation" pkg="uav_localize" type="evaluator.py" output="screen" launch-prefix="$(arg launch_prefix)">
+  <node name="localization_evaluation" pkg="uav_localize" type="speed_eval.py" output="screen" launch-prefix="$(arg launch_prefix)">
     <param name="localization_bag_name" value="$(arg bags_base_path)/$(arg loc_bag)" />
     <param name="ground_truth_bag_name" value="$(arg bags_base_path)/$(arg gt_bag)" />
     <param name="observer_bag_name" value="$(arg bags_base_path)/$(arg gt_bag)" />
@@ -32,10 +32,10 @@
     <param name="ground_truth_topic_name" value="$(arg ground_truth_topic)" />
     <param name="observer_ground_truth_topic_name" value="$(arg observer_ground_truth_topic)" />
 
-    <param name="localization_out_fname" value="$(find cnn_detect)/output/depth/loc_out.csv" />
-    <param name="ground_truth_out_fname" value="$(find cnn_detect)/output/depth/gt_out.csv" />
+    <param name="localization_out_fname" value="$(find cnn_detect)/output/both/loc_out.csv" />
+    <param name="ground_truth_out_fname" value="$(find cnn_detect)/output/both/gt_out.csv" />
     <param name="tf_out_fname" value="$(find cnn_detect)/output/tf_out.csv" />
-    <param name="distance_error_out_fname" value="$(find cnn_detect)/output/depth/dist_err_out.csv" />
+    <param name="distance_error_out_fname" value="$(find cnn_detect)/output/both/spd_err_out.csv" />
     <param name="TP_probability_out_fname" value="$(find cnn_detect)/output/TP_prob_out.csv" />
     <!-- <remap from="~localization" to="$(arg localization_topic)" /> -->
   </node>

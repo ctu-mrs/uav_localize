@@ -25,7 +25,8 @@
       <remap from="~camera_info" to="$(arg cinfo_topic)" />
       <remap from="~dbg_hypotheses" to="$(arg dbgloc_topic)" />
       <remap from="~detections" to="$(arg dets_topic)" />
-      <remap from="~fire_topic" to="/$(arg uav_name)/fire_topic" />
+      <remap from="~ground_truth" to="/uav4/odometry/rtk_local_odom" />
+      <remap from="~odometry" to="/uav42/odometry/rtk_local_odom" />
 
     </node>
 

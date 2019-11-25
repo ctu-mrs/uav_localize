@@ -63,10 +63,10 @@ namespace uav_localize
       // Subscribers
       mrs_lib::SubscribeMgr smgr(nh, m_node_name);
       const bool subs_time_consistent = false;
-      m_sh_detections_ptr = smgr.create_handler<uav_detect::DetectionsConstPtr, subs_time_consistent>("detections", ros::Duration(5.0));
-      m_sh_cnn_detections_ptr = smgr.create_handler<cnn_detect::DetectionsConstPtr, subs_time_consistent>("cnn_detections", ros::Duration(5.0));
-      m_sh_trackings_ptr = smgr.create_handler<uav_track::TrackingsConstPtr, subs_time_consistent>("trackings", ros::Duration(5.0));
-      m_sh_cinfo_ptr = smgr.create_handler<sensor_msgs::CameraInfoConstPtr, subs_time_consistent>("camera_info", ros::Duration(5.0));
+      m_sh_detections_ptr = smgr.create_handler<uav_detect::Detections, subs_time_consistent>("detections", ros::Duration(5.0));
+      m_sh_cnn_detections_ptr = smgr.create_handler<cnn_detect::Detections, subs_time_consistent>("cnn_detections", ros::Duration(5.0));
+      m_sh_trackings_ptr = smgr.create_handler<uav_track::Trackings, subs_time_consistent>("trackings", ros::Duration(5.0));
+      m_sh_cinfo_ptr = smgr.create_handler<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", ros::Duration(5.0));
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
       m_pub_dgb_hypotheses = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 10);
@@ -321,10 +321,10 @@ namespace uav_localize
     std::unique_ptr<drmgr_t> m_drmgr_ptr;
     tf2_ros::Buffer m_tf_buffer;
     std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_detect::DetectionsConstPtr> m_sh_detections_ptr;
-    mrs_lib::SubscribeHandlerPtr<cnn_detect::DetectionsConstPtr> m_sh_cnn_detections_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_track::TrackingsConstPtr> m_sh_trackings_ptr;
-    mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfoConstPtr> m_sh_cinfo_ptr;
+    mrs_lib::SubscribeHandlerPtr<uav_detect::Detections> m_sh_detections_ptr;
+    mrs_lib::SubscribeHandlerPtr<cnn_detect::Detections> m_sh_cnn_detections_ptr;
+    mrs_lib::SubscribeHandlerPtr<uav_track::Trackings> m_sh_trackings_ptr;
+    mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfo> m_sh_cinfo_ptr;
     ros::Publisher m_pub_localized_uav;
     ros::Publisher m_pub_dgb_hypotheses;
     ros::Publisher m_pub_dgb_pcl_hyps;
