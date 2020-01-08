@@ -674,7 +674,7 @@ namespace uav_localize
     {
       /* const Eigen::Vector3d hyp_pos = hyp.get_position(); */
       /* const Eigen::Matrix3d hyp_cov = hyp.get_position_covariance(); */
-      double max_loglikelihood = std::numeric_limits<double>::min();
+      double max_loglikelihood = std::numeric_limits<double>::lowest();
       int max_dis_it = -1;
 
       // Find measurement with smallest likelihood from this hypothesis and assign the measurement to it
@@ -693,7 +693,7 @@ namespace uav_localize
           const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas, dist2);
           /* const double likelihood = exp(loglikelihood); */
 
-          if (loglikelihood < max_loglikelihood)
+          if (loglikelihood > max_loglikelihood)
           {
             max_loglikelihood = loglikelihood;
             max_dis_it = it;
