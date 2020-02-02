@@ -500,28 +500,32 @@ def main():
             # TP_mask = np.logical_and(TP_mask, loc_positions_time_aligned[:, 0] < 6.0)
             # TP_mask = np.logical_and(TP_mask, loc_positions_time_aligned[:, 1] > -100.0)
             FP_mask1 = np.logical_and.reduce((
-                                        loc_positions_time_aligned[:, 2] < -2.9,
-                                        loc_positions_time_aligned[:, 0] > -5.0, loc_positions_time_aligned[:, 0] < -2.0
+                                        loc_positions_time_aligned[:, 1] > 2.0,
+                                        loc_positions_time_aligned[:, 2] < -3.0
             ))
             FP_mask2 = np.logical_and.reduce((
-                                        loc_positions_time_aligned[:, 2] < -2.9,
-                                        loc_positions_time_aligned[:, 0] > 2.0, loc_positions_time_aligned[:, 0] < 4.0,
-                                        loc_positions_time_aligned[:, 1] > 1.5, loc_positions_time_aligned[:, 1] < 4.0
+                                        loc_positions_time_aligned[:, 0] < -2.0,
+                                        loc_positions_time_aligned[:, 2] < -3.0
             ))
-            FP_mask3 = np.logical_and.reduce((
-                                        loc_positions_time_aligned[:, 2] > 15.0,
-            ))
-            FP_mask = np.logical_or.reduce((FP_mask1, FP_mask2, FP_mask3))
+            # FP_mask2 = np.logical_and.reduce((
+            #                             loc_positions_time_aligned[:, 2] < -2.9,
+            #                             loc_positions_time_aligned[:, 0] > 2.0, loc_positions_time_aligned[:, 0] < 4.0,
+            #                             loc_positions_time_aligned[:, 1] > 1.5, loc_positions_time_aligned[:, 1] < 4.0
+            # ))
+            # FP_mask3 = np.logical_and.reduce((
+            #                             loc_positions_time_aligned[:, 2] > 15.0,
+            # ))
+            FP_mask = np.logical_or.reduce((FP_mask1, FP_mask2))
             TP_mask = np.logical_and(TP_mask, ~FP_mask)
             loc_pos = loc_positions_time_aligned[TP_mask, :]
     
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-            # ax.grid()
-            # ax.plot(loc_pos[:, 0], loc_pos[:, 1], loc_pos[:, 2], 'bo')
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.grid()
+            ax.plot(loc_pos[:, 0], loc_pos[:, 1], loc_pos[:, 2], 'bo')
             # ax.plot(loc_positions_time_aligned[~TP_mask, 0], loc_positions_time_aligned[~TP_mask, 1], loc_positions_time_aligned[~TP_mask, 2], 'gx')
-            # ax.plot(gt_positions[:, 0], gt_positions[:, 1], gt_positions[:, 2], 'rx')
-            # plt.show()
+            ax.plot(gt_positions[:, 0], gt_positions[:, 1], gt_positions[:, 2], 'rx')
+            plt.show()
 
             gt_pos = gt_positions[TP_mask, :]
             tf = find_min_tf(gt_pos, loc_pos, FP_error, only_rot=False)
@@ -604,6 +608,10 @@ def main():
     dists = np.linalg.norm(min_positions, axis=1)
     est_dists = np.linalg.norm(tposs[TP_mask], axis=1)
     TP_dists = dists[TP_mask]
+
+    plt.plot(TP_dists, TP_errors)
+    plt.show()
+
     # _, pos_hist_edges = np.histogram(dists, bins=20)
     # pos_hist, _ = np.histogram(dists, bins=pos_hist_edges)
     # pos_hist = np.array(pos_hist, dtype=float)

@@ -1,0 +1,37 @@
+<launch>
+
+  <arg name="debug" default="false" />
+  <arg unless="$(arg debug)" name="launch_prefix" value=""/>
+  <arg     if="$(arg debug)" name="launch_prefix" value="pdb"/>
+
+  <arg name="type" default="both"/>
+  <!-- depth: -2.0, cnn: +0.5, both: -0.5 -->
+
+  <arg name="bags_base_path" default="/home/$(env USER)/bag_files/uav_detect/icra2019"/>
+  <arg name="loc_bag" default="out/localizations_$(arg type)_corrected.bag"/>
+  <arg name="gt_bag" default="out/odoms.bag"/>
+  <arg name="bag_inputs" default="$(arg bags_base_path)/$(arg loc_bag) $(arg bags_base_path)/$(arg gt_bag)"/>
+
+  <arg name="skip_time" default="35"/>
+  <arg name="delay_time" default="0"/>
+  <arg name="rate_publish" default="5.0"/>
+  <node name="rosbag_play" pkg="rosbag" type="play" args="$(arg bag_inputs) -s $(arg skip_time) -d $(arg delay_time) -r $(arg rate_publish)" />
+
+  <arg name="localization_topic" default="/uav42/uav_localization/localized_uav"/>
+  <arg name="observer_ground_truth_topic" default="/uav42/odometry/rtk_local_odom"/>
+  <arg name="observer_odometry_topic" default="/uav42/odometry/odom_main"/>
+  <arg name="target_ground_truth_topic" default="/uav4/odometry/rtk_local_odom"/>
+
+  <node name="localization_evaluation" pkg="uav_localize" type="online_eval.py" output="screen" launch-prefix="$(arg launch_prefix)">
+
+    <param name="out_filename" value="/tmp/output/disterr.csv" />
+
+    <remap from="~localization" to="$(arg localization_topic)" />
+    <remap from="~target_ground_truth" to="$(arg target_ground_truth_topic)" />
+    <remap from="~observer_ground_truth" to="$(arg observer_ground_truth_topic)" />
+    <remap from="~observer_odometry" to="$(arg observer_odometry_topic)" />
+
+  </node>
+
+</launch>
+
