@@ -164,13 +164,13 @@ int main(int argc, char** argv)
   nh.param("detection_timeout", detection_timeout, 0.5);
   ROS_INFO("detection_timeout: %f", detection_timeout);
 
-  mrs_lib::SubscribeMgr smgr(nh, "backprojection_node");
-  auto sh_hyps = smgr.create_handler<uav_localize::LocalizationHypotheses>("dbg_hypotheses", ros::Duration(5.0));
-  /* auto sh_dets = smgr.create_handler<uav_detect::Detections>("detections", ros::Duration(5.0)); */
-  auto sh_img = smgr.create_handler<sensor_msgs::Image>("image_rect", ros::Duration(5.0));
-  auto sh_cinfo = smgr.create_handler<sensor_msgs::CameraInfo>("camera_info", ros::Duration(5.0));
-  auto sh_gt = smgr.create_handler<nav_msgs::Odometry>("ground_truth", ros::Duration(5.0));
-  auto sh_pos = smgr.create_handler<nav_msgs::Odometry>("odometry", ros::Duration(5.0));
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.no_message_timeout = ros::Duration(5.0);
+  auto sh_hyps = mrs_lib::SubscribeHandler<uav_localize::LocalizationHypotheses>(shopts, "dbg_hypotheses");
+  auto sh_img = mrs_lib::SubscribeHandler<sensor_msgs::Image>(shopts, "image_rect");
+  auto sh_cinfo = mrs_lib::SubscribeHandler<sensor_msgs::CameraInfo>(shopts, "camera_info");
+  auto sh_gt = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "ground_truth");
+  auto sh_pos = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "odometry");
 
   tf2_ros::Buffer tf_buffer;
   tf2_ros::TransformListener tf_listener(tf_buffer);
@@ -194,9 +194,9 @@ int main(int argc, char** argv)
   {
     ros::spinOnce();
 
-    if (sh_cinfo->has_data() && !sh_cinfo->used_data())
+    if (sh_cinfo.hasMsg() && !sh_cinfo.usedMsg())
     {
-      camera_model.fromCameraInfo(sh_cinfo->get_data());
+      camera_model.fromCameraInfo(sh_cinfo.getMsg());
 
       /* string filename = "./backproject_output.avi";             // name of the output video file */
       /* ROS_INFO("[%s]: Initializing video writer to file %s", ros::this_node::getName().c_str(), filename.c_str()); */
@@ -213,15 +213,15 @@ int main(int argc, char** argv)
       /* } */
     }
 
-    if (sh_img->new_data())
-      add_to_buffer(sh_img->get_data(), img_buffer);
+    if (sh_img.newMsg())
+      add_to_buffer(sh_img.getMsg(), img_buffer);
 
-    if (sh_img->has_data() && sh_cinfo->used_data())
+    if (sh_img.hasMsg() && sh_cinfo.usedMsg())
     {
       cv::Mat img;
-      /* if (sh_dets->has_data()) */
+      /* if (sh_dets.hasMsg()) */
       /* { */
-      /*   ros::Time cur_det_t = sh_dets->get_data()->header.stamp; */
+      /*   ros::Time cur_det_t = sh_dets.getMsg()->header.stamp; */
       /*   if (cur_det_t != prev_det_t) */
       /*   { */
       /*     const double cur_freq = 1.0/(cur_det_t - prev_det_t).toSec(); */
@@ -229,9 +229,9 @@ int main(int argc, char** argv)
       /*     prev_det_t = cur_det_t; */
       /*   } */
       /* } */
-      if (sh_hyps->has_data())
+      if (sh_hyps.hasMsg())
       {
-        uav_localize::LocalizationHypotheses hyps_msg = *sh_hyps->get_data();
+        uav_localize::LocalizationHypotheses hyps_msg = *sh_hyps.getMsg();
         if (hyps_msg.main_hypothesis_id >= 0)
           last_valid_hypothesis_stamp = hyps_msg.header.stamp;
         const ros::Time cur_loc_t = hyps_msg.header.stamp;
@@ -307,9 +307,9 @@ int main(int argc, char** argv)
 
             bool show_error = false;
             double cur_err = std::numeric_limits<double>::quiet_NaN();
-            if (sh_gt->has_data())
+            if (sh_gt.hasMsg())
             {
-              nav_msgs::Odometry gt = *sh_gt->get_data();
+              nav_msgs::Odometry gt = *sh_gt.getMsg();
               const auto hx = pt3d_global.x;
               const auto hy = pt3d_global.y;
               const auto hz = pt3d_global.z;
@@ -349,10 +349,10 @@ int main(int argc, char** argv)
             {
               const double est_dist = sqrt(pt3d.x*pt3d.x + pt3d.y*pt3d.y + pt3d.z*pt3d.z);
               double gt_dist = std::numeric_limits<double>::quiet_NaN();
-              if (sh_pos->has_data() && sh_gt->has_data())
+              if (sh_pos.hasMsg() && sh_gt.hasMsg())
               {
-                auto pos = *sh_pos->get_data();
-                auto gt = *sh_gt->get_data();
+                auto pos = *sh_pos.getMsg();
+                auto gt = *sh_gt.getMsg();
                 const auto px = pos.pose.pose.position.x;
                 const auto py = pos.pose.pose.position.y;
                 const auto pz = pos.pose.pose.position.z;
@@ -386,7 +386,7 @@ int main(int argc, char** argv)
             }
           } // if (show_all_hyps || is_main)
         } // for (const auto& hyp_msg : hyps_msg.hypotheses)
-      } else // if (sh_hyps->new_data())
+      } else // if (sh_hyps.newMsg())
       {
         sensor_msgs::ImageConstPtr img_ros = img_buffer.back();
         cv_bridge::CvImagePtr img_ros2 = cv_bridge::toCvCopy(img_ros, img_ros->encoding);
