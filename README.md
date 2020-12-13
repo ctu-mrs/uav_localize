@@ -32,9 +32,8 @@ For a more thorough description and evaluation of the algorithm implemented in t
  * **localization_pipeline.launch**: Starts the sensor driver nodelet, detection nodelet and localization nodelet under a single nodelet manager (see ROS nodelets for explanation).
 
 ### The following config files are used by the nodes:
- * **detection_params_F550.yaml:** Contains parameters for the blob detection, tuned to detect the F550 from real-world data. Parameters are documented in the file itself.
- * **localization_params_F550.yaml:** Contains parameters for the single UAV localization, tuned to detect the F550 from real-world data. Parameters are documented in the file itself.
- * Variants of the above files with the *sim_* prependix are provided for use with simulation.
+ * **localization_params_common.yaml:** Contains common parameters for the UAV localization parameter. Parameters are documented in the file itself.
+ * **localization_params_realsense.yaml:** Contains parameters for the UAV localization, tuned to detect drones on real-world data with the Realsense sensor. Parameters are documented in the file itself.
 Most parameters (those which make sense) from the above files are dynamically reconfigurable.
 
 ### To launch simulation, detection, localization and visualization:
