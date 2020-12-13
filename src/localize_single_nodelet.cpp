@@ -36,13 +36,12 @@ namespace uav_localize
       mrs_lib::ParamLoader pl(nh, m_node_name);
       // LOAD STATIC PARAMETERS
       NODELET_INFO("[LocalizeSingle]: Loading static parameters:");
-      pl.load_param("world_frame", m_world_frame, std::string("local_origin"));
-      const int update_loop_rate = pl.load_param2<int>("update_loop_rate");
-      const int process_loop_rate = pl.load_param2<int>("process_loop_rate");
-      const int publish_loop_rate = pl.load_param2<int>("publish_loop_rate");
-      const int info_loop_rate = pl.load_param2<int>("info_loop_rate");
-      pl.load_param("min_detection_height", m_min_detection_height);
-      if (!pl.loaded_successfully())
+      pl.loadParam("world_frame", m_world_frame, std::string("local_origin"));
+      const int process_loop_rate = pl.loadParam2<int>("process_loop_rate");
+      const int publish_loop_rate = pl.loadParam2<int>("publish_loop_rate");
+      const int info_loop_rate = pl.loadParam2<int>("info_loop_rate");
+      pl.loadParam("min_detection_height", m_min_detection_height);
+      if (!pl.loadedSuccessfully())
       {
         NODELET_ERROR("[LocalizeSingle]: Some compulsory parameters were not loaded successfully, ending the node");
         ros::shutdown();
@@ -62,11 +61,12 @@ namespace uav_localize
       // Initialize transform listener
       m_tf_listener_ptr = std::make_unique<tf2_ros::TransformListener>(m_tf_buffer);
       // Subscribers
-      mrs_lib::SubscribeMgr smgr(nh, m_node_name);
-      const bool subs_time_consistent = false;
-      m_sh_detections_ptr = smgr.create_handler<uav_detect::Detections, subs_time_consistent>("detections", ros::Duration(5.0));
-      m_sh_trackings_ptr = smgr.create_handler<uav_track::Trackings, subs_time_consistent>("trackings", ros::Duration(5.0));
-      m_sh_cinfo_ptr = smgr.create_handler<sensor_msgs::CameraInfo, subs_time_consistent>("camera_info", ros::Duration(5.0));
+      mrs_lib::SubscribeHandlerOptions shopts;
+      shopts.no_message_timeout = ros::Duration(5.0);
+      mrs_lib::construct_object(m_sh_depth_detections, shopts, "detections");
+      mrs_lib::construct_object(m_sh_cnn_detections, shopts, "cnn_detections");
+      /* mrs_lib::construct_object(m_sh_trackings, shopts, "trackings"); */
+      mrs_lib::construct_object(m_sh_cinfo, shopts, "camera_info");
       // Publishers
       m_pub_localized_uav = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("localized_uav", 10);
       m_pub_dgb_hypotheses = nh.advertise<uav_localize::LocalizationHypotheses>("dbg_hypotheses", 10);
@@ -75,8 +75,8 @@ namespace uav_localize
       //}
 
       /* Initialize other variables //{ */
-      m_lkf_dt = 1.0 / double(update_loop_rate);
       m_depth_detections = 0;
+      m_cnn_detections = 0;
       m_rgb_trackings = 0;
       m_most_certain_hyp_name = "none";
 
@@ -97,22 +97,24 @@ namespace uav_localize
     /* process_loop() method //{ */
     void process_loop([[maybe_unused]] const ros::TimerEvent& evt)
     {
-      const bool got_depth_detections = m_sh_detections_ptr->new_data();
-      const bool got_rgb_tracking = m_sh_trackings_ptr->new_data();
-      const bool got_something_to_process = got_depth_detections || got_rgb_tracking;
-      const bool should_process = got_something_to_process && m_sh_cinfo_ptr->has_data();
+      const bool got_depth_detections = m_sh_depth_detections.newMsg();
+      const bool got_cnn_detections = m_sh_cnn_detections.newMsg();
+      /* const bool got_rgb_tracking = m_sh_trackings_ptr.newMsg(); */
+      const bool got_rgb_tracking = false;
+      const bool got_something_to_process = got_depth_detections || got_cnn_detections || got_rgb_tracking;
+      const bool should_process = got_something_to_process && m_sh_cinfo.hasMsg();
       if (should_process)
       {
         /* Initialize the camera model if not initialized yet //{ */
-        if (!m_sh_cinfo_ptr->used_data())
-          m_camera_model.fromCameraInfo(m_sh_cinfo_ptr->get_data());
+        if (!m_sh_cinfo.usedMsg())
+          m_camera_model.fromCameraInfo(m_sh_cinfo.getMsg());
         //}
 
         if (got_depth_detections)
         {
           /* Update the hypotheses using this message //{ */
           {
-            const uav_detect::DetectionsConstPtr last_detections_msg = m_sh_detections_ptr->get_data();
+            const uav_detect::DetectionsConstPtr last_detections_msg = m_sh_depth_detections.getMsg();
             const std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
             /* if (measurements.empty()) */
             /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_detections_msg).c_str()); */
@@ -139,28 +141,59 @@ namespace uav_localize
           //}
         }
 
-        if (got_rgb_tracking)
+        if (got_cnn_detections)
         {
           /* Update the hypotheses using this message //{ */
           {
-            const uav_track::TrackingsConstPtr last_trackings_msg = m_sh_trackings_ptr->get_data();
-            const std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg);
+            const cnn_detect::DetectionsConstPtr last_detections_msg = m_sh_cnn_detections.getMsg();
+            const std::vector<Measurement> measurements = measurements_from_message(last_detections_msg);
             /* if (measurements.empty()) */
-            /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_trackings_msg).c_str()); */
+            /*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_detections_msg).c_str()); */
             {
               std::lock_guard<std::mutex> lck(m_hyps_mtx);
               update_hyps(measurements, m_hyps);
             }
+
+            /* Publish debug pointcloud message of measurements //{ */
+            if (m_pub_dgb_pcl_meas.getNumSubscribers() > 0)
+            {
+              sensor_msgs::PointCloudConstPtr pcl_msg = create_pcl_message(measurements, last_detections_msg->header.stamp);
+              m_pub_dgb_pcl_meas.publish(pcl_msg);
+            }
+            //}
           }
           //}
 
-          /* Update the number of received rgb trackings //{ */
+          /* Update the number of received depth detections //{ */
           {
             std::lock_guard<std::mutex> lck(m_stat_mtx);
-            m_rgb_trackings++;
+            m_cnn_detections++;
           }
           //}
         }
+
+        /* if (got_rgb_tracking) */
+        /* { */
+        /*   /1* Update the hypotheses using this message //{ *1/ */
+        /*   { */
+        /*     const uav_track::TrackingsConstPtr last_trackings_msg = m_sh_trackings_ptr.getMsg(); */
+        /*     const std::vector<Measurement> measurements = measurements_from_message(last_trackings_msg); */
+        /*     /1* if (measurements.empty()) *1/ */
+        /*     /1*   NODELET_WARN("Received empty message from source %s", get_msg_name(last_trackings_msg).c_str()); *1/ */
+        /*     { */
+        /*       std::lock_guard<std::mutex> lck(m_hyps_mtx); */
+        /*       update_hyps(measurements, m_hyps); */
+        /*     } */
+        /*   } */
+        /*   //} */
+
+        /*   /1* Update the number of received rgb trackings //{ *1/ */
+        /*   { */
+        /*     std::lock_guard<std::mutex> lck(m_stat_mtx); */
+        /*     m_rgb_trackings++; */
+        /*   } */
+        /*   //} */
+        /* } */
       }
     }
     //}
@@ -189,6 +222,7 @@ namespace uav_localize
       if (most_certain_hyp != nullptr)
       {
         geometry_msgs::PoseWithCovarianceStampedConstPtr msg = create_message(*most_certain_hyp, stamp);
+        /* m_tf_buffer.transform(*msg, *msg, "rs_d435_color_optical_frame", ros::Duration(0.01)); */
         m_pub_localized_uav.publish(msg);
       }
       //}
@@ -242,22 +276,25 @@ namespace uav_localize
     {
       const float dt = (evt.current_real - evt.last_real).toSec();
       float depth_detections_rate;
+      float cnn_detections_rate;
       float rgb_trackings_rate;
       int n_hypotheses;
       std::string most_certain_hyp_name;
       {
         std::lock_guard<std::mutex> lck(m_stat_mtx);
         depth_detections_rate = round(m_depth_detections / dt);
+        cnn_detections_rate = round(m_cnn_detections / dt);
         rgb_trackings_rate = round(m_rgb_trackings / dt);
         most_certain_hyp_name = m_most_certain_hyp_name;
         m_depth_detections = 0;
+        m_cnn_detections = 0;
         m_rgb_trackings = 0;
       }
       {
         std::lock_guard<std::mutex> lck(m_hyps_mtx);
         n_hypotheses = m_hyps.size();
       }
-      NODELET_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate)
+      NODELET_INFO_STREAM("[" << m_node_name << "]: det. rate: " << round(depth_detections_rate) << "/" << round(cnn_detections_rate) << " Hz | trk. rate: " << round(rgb_trackings_rate)
                           << " Hz | #hyps: " << n_hypotheses << " | pub. hyp.: " << most_certain_hyp_name);
     }
     //}
@@ -268,7 +305,6 @@ namespace uav_localize
     // --------------------------------------------------------------
 
     /* Parameters, loaded from ROS //{ */
-    double m_lkf_dt;
     double m_min_detection_height;
     std::string m_world_frame;
     std::string m_node_name;
@@ -286,9 +322,10 @@ namespace uav_localize
     std::unique_ptr<drmgr_t> m_drmgr_ptr;
     tf2_ros::Buffer m_tf_buffer;
     std::unique_ptr<tf2_ros::TransformListener> m_tf_listener_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_detect::Detections> m_sh_detections_ptr;
-    mrs_lib::SubscribeHandlerPtr<uav_track::Trackings> m_sh_trackings_ptr;
-    mrs_lib::SubscribeHandlerPtr<sensor_msgs::CameraInfo> m_sh_cinfo_ptr;
+    mrs_lib::SubscribeHandler<uav_detect::Detections> m_sh_depth_detections;
+    mrs_lib::SubscribeHandler<cnn_detect::Detections> m_sh_cnn_detections;
+    /* mrs_lib::SubscribeHandlerPtr<uav_track::Trackings> m_sh_trackings_ptr; */
+    mrs_lib::SubscribeHandler<sensor_msgs::CameraInfo> m_sh_cinfo;
     ros::Publisher m_pub_localized_uav;
     ros::Publisher m_pub_dgb_hypotheses;
     ros::Publisher m_pub_dgb_pcl_hyps;
@@ -310,10 +347,15 @@ namespace uav_localize
       return msg->detections;
     }
 
-    const std::vector<uav_track::Tracking>& get_detections(const uav_track::TrackingsConstPtr& msg)
+    const std::vector<cnn_detect::Detection>& get_detections(const cnn_detect::DetectionsConstPtr& msg)
     {
-      return msg->trackings;
+      return msg->detections;
     }
+
+    /* const std::vector<uav_track::Tracking>& get_detections(const uav_track::TrackingsConstPtr& msg) */
+    /* { */
+    /*   return msg->trackings; */
+    /* } */
     //}
 
     /* detection_to_measurement() method //{ */
@@ -322,10 +364,14 @@ namespace uav_localize
     {
       return det.depth;
     }
-    float get_depth(const uav_track::Tracking& det)
+    float get_depth(const cnn_detect::Detection& det)
     {
-      return det.estimated_depth;
+      return det.depth;
     }
+    /* float get_depth(const uav_track::Tracking& det) */
+    /* { */
+    /*   return det.estimated_depth; */
+    /* } */
 
     template <typename Detection>
     Eigen::Vector3d position_from_detection(const Detection& det)
@@ -349,14 +395,22 @@ namespace uav_localize
       ret = calc_position_covariance(position, xy_covariance_coeff, z_covariance_coeff);
       return ret;
     }
-    Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const uav_track::Tracking& det, const Eigen::Vector3d& position)
+    Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const cnn_detect::Detection& det, const Eigen::Vector3d& position)
     {
       Eigen::Matrix3d ret;
-      const double xy_covariance_coeff = m_drmgr_ptr->config.depth_detections__xy_covariance_coeff;
-      const double z_covariance_coeff = m_drmgr_ptr->config.depth_detections__z_covariance_coeff;
+      const double xy_covariance_coeff = m_drmgr_ptr->config.cnn_detections__xy_covariance_coeff;
+      const double z_covariance_coeff = m_drmgr_ptr->config.cnn_detections__z_covariance_coeff;
       ret = calc_position_covariance(position, xy_covariance_coeff, z_covariance_coeff);
       return ret;
     }
+    /* Eigen::Matrix3d covariance_from_detection([[maybe_unused]] const uav_track::Tracking& det, const Eigen::Vector3d& position) */
+    /* { */
+    /*   Eigen::Matrix3d ret; */
+    /*   const double xy_covariance_coeff = m_drmgr_ptr->config.depth_detections__xy_covariance_coeff; */
+    /*   const double z_covariance_coeff = m_drmgr_ptr->config.depth_detections__z_covariance_coeff; */
+    /*   ret = calc_position_covariance(position, xy_covariance_coeff, z_covariance_coeff); */
+    /*   return ret; */
+    /* } */
     //}
 
     /*  detection_source() method overloads//{ */
@@ -364,10 +418,14 @@ namespace uav_localize
     {
       return Measurement::source_t::depth_detection;
     }
-    Measurement::source_t source_of_detection([[maybe_unused]] const uav_track::Tracking&)
+    Measurement::source_t source_of_detection([[maybe_unused]] const cnn_detect::Detection&)
     {
-      return Measurement::source_t::rgb_tracking;
+      return Measurement::source_t::cnn_detection;
     }
+    /* Measurement::source_t source_of_detection([[maybe_unused]] const uav_track::Tracking&) */
+    /* { */
+    /*   return Measurement::source_t::rgb_tracking; */
+    /* } */
     //}
 
     template <typename Detection>
@@ -427,6 +485,34 @@ namespace uav_localize
     }
     //}
 
+    /* inflate_covariance() method //{ */
+    Measurement inflate_covariance(Measurement meas)
+    {
+      const Measurement::source_t source = meas.source;
+      double coeff;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wswitch"
+      switch (source)
+      {
+        case Measurement::source_t::depth_detection:
+          coeff = m_drmgr_ptr->config.depth_detections__cov_inflation_coeff;
+          break;
+        case Measurement::source_t::cnn_detection:
+          coeff = m_drmgr_ptr->config.cnn_detections__cov_inflation_coeff;
+          break;
+        case Measurement::source_t::rgb_tracking:
+          coeff = m_drmgr_ptr->config.rgb_trackings__cov_inflation_coeff;
+          break;
+        case Measurement::source_t::lkf_prediction:
+          coeff = std::numeric_limits<double>::max(); // this should not happen...
+          break;
+      }
+#pragma GCC diagnostic pop
+      meas.covariance *= coeff;
+      return meas;
+    }
+    //}
+
     /* update_hyps() method //{ */
     // this method updates the hypothesis with the supplied measurements and creates new ones
     // for new measurements
@@ -442,7 +528,8 @@ namespace uav_localize
         // Evaluate whether the likelihood is small enough to justify the update
         if (closest_it >= 0)
         {
-          hyp.correction_step(measurements.at(closest_it), loglikelihood);
+          const auto meas = inflate_covariance(measurements.at(closest_it));
+          hyp.correction_step(meas, loglikelihood);
           meas_used.at(closest_it)++;
           NODELET_DEBUG("[LocalizeSingle]: Updated hypothesis ID%d using measurement from %s (l: %f)", hyp.id, measurements.at(closest_it).source_name().c_str(), exp(loglikelihood));
         }
@@ -539,7 +626,7 @@ namespace uav_localize
     {
       try
       {
-        const ros::Duration timeout(1.0 / 100.0);
+        const ros::Duration timeout(1.0 / 10.0);
         geometry_msgs::TransformStamped transform;
         // Obtain transform from snesor into world frame
         transform = m_tf_buffer.lookupTransform(m_world_frame, frame_id, stamp, timeout);
@@ -606,10 +693,14 @@ namespace uav_localize
     {
       return "uav_detect::Detections";
     }
-    static std::string get_msg_name([[maybe_unused]] const uav_track::TrackingsConstPtr& msg)
+    static std::string get_msg_name([[maybe_unused]] const cnn_detect::DetectionsConstPtr& msg)
     {
-      return "uav_track::Trackings";
+      return "cnn_detect::Detections";
     }
+    /* static std::string get_msg_name([[maybe_unused]] const uav_track::TrackingsConstPtr& msg) */
+    /* { */
+    /*   return "uav_track::Trackings"; */
+    /* } */
     //}
 
     /* rotate_covariance() method //{ */
@@ -630,7 +721,7 @@ namespace uav_localize
 
     /* calc_hyp_meas_loglikelihood() method //{ */
     template <unsigned num_dimensions>
-    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas, [[maybe_unused]] const double mahalanobis_distance2)
+    static double calc_hyp_meas_loglikelihood(const Hypothesis& hyp, const Measurement& meas)
     {
       const auto [inn, inn_cov] = hyp.calc_innovation(meas);
       /* const Eigen::Matrix3d inn_cov = meas.covariance + hyp.get_position_covariance_at(meas.stamp); */
@@ -655,6 +746,9 @@ namespace uav_localize
       {
         case Measurement::source_t::depth_detection:
           ret = m_drmgr_ptr->config.depth_detections__max_gating_distance;
+          break;
+        case Measurement::source_t::cnn_detection:
+          ret = m_drmgr_ptr->config.cnn_detections__max_gating_distance;
           break;
         case Measurement::source_t::rgb_tracking:
           ret = m_drmgr_ptr->config.rgb_trackings__max_gating_distance;
@@ -685,12 +779,12 @@ namespace uav_localize
           NODELET_ERROR("[LocalizeSingle]: Covariance of LKF contains NaNs!");
         /* const Eigen::Vector3d& det_pos = meas.position; */
         /* const Eigen::Matrix3d& det_cov = meas.covariance; */
-        const auto [pos, pos_cov] = hyp.get_position_and_covariance_at(meas.stamp);
-        const double dist2 = mahalanobis_distance2(meas.position, pos, pos_cov);
-        const double max_dist = max_gating_distance(meas.source);
-        if (dist2 < max_dist*max_dist)
+        /* const auto [pos, pos_cov] = hyp.get_position_and_covariance_at(meas.stamp); */
+        const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas);
+        const double min_log = max_gating_distance(meas.source);
+        /* std::cout << "l: " << loglikelihood << ">?" << min_log << std::endl; */
+        if (loglikelihood > min_log)
         {
-          const double loglikelihood = calc_hyp_meas_loglikelihood<3>(hyp, meas, dist2);
           /* const double likelihood = exp(loglikelihood); */
 
           if (loglikelihood > max_loglikelihood)
@@ -883,6 +977,7 @@ namespace uav_localize
     std::mutex m_stat_mtx;  // mutex for synchronization of the statistics variables
     unsigned m_rgb_trackings;
     unsigned m_depth_detections;
+    unsigned m_cnn_detections;
     std::string m_most_certain_hyp_name;
     //}
 

@@ -9,7 +9,7 @@
   <arg name="simulation" default="$(optenv SIMULATION false)" />
   <arg unless="$(arg simulation)" name="config_file" value="$(find uav_localize)/config/localization_params_F550.yaml"/>
   <arg     if="$(arg simulation)" name="config_file" value="$(find uav_localize)/config/sim_localization_params_F550.yaml"/>
-  <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/nerian_driver/depth_camera_info"/>
+  <arg unless="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/rs_d435/color/camera_info"/>
   <arg     if="$(arg simulation)" name="cinfo_topic" value="/$(arg uav_name)/realsense/camera/depth/camera_info/"/>
 
   <arg name="standalone" default="true" />
@@ -29,6 +29,7 @@
       <param name="uav_name" value="$(arg uav_name)" />
     
       <remap from="~detections" to="/$(arg uav_name)/uav_detection/detections" />
+      <remap from="~cnn_detections" to="/$(arg uav_name)/cnn_detect/detections" />
       <remap from="~trackings" to="/$(arg uav_name)/uav_tracking/trackings" />
       <remap from="~camera_info" to="$(arg cinfo_topic)" />
 

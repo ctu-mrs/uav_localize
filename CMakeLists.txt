@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_lib
   nodelet
   uav_detect
-  uav_track
+  cnn_detect
 )
 
 set(CMAKE_CXX_FLAGS "-g -O0 -DEIGEN_INITIALIZE_MATRICES_BY_NAN -fno-inline-functions")

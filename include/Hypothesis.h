@@ -5,6 +5,8 @@
 #include "Measurement.h"
 #include "Lkf.h"
 
+#include <boost/circular_buffer.hpp>
+
 namespace uav_localize
 {
   /* remove_cons() function //{ */

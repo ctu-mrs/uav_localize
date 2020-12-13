@@ -184,9 +184,9 @@ def get_positions_time(positions1, times1, positions2, times2):
         tposs[it, :] = positions2[closest_it, :]
     return tposs
 
-# def calc_errors_time(positions1, tposs):
-#     max_dt = 0.1
-#     return np.linalg.norm(tposs-positions1, axis=1)
+def calc_errors_time(positions1, tposs):
+    max_dt = 0.1
+    return np.linalg.norm(tposs-positions1, axis=1)
 
 def calc_errors(positions1, positions2):
     errors = np.linalg.norm(positions1 - positions2, axis=1)
@@ -227,13 +227,13 @@ def calc_avg_error_diff(positions1, positions2, FP_error):
 
 
 def find_min_tf(positions, to_positions, FP_error, only_rot=False):
-    lam_ang = 2e-1
+    lam_ang = 2e-2
     lam_pos = 2e-3
     if only_rot:
         lam_pos = 0
     # N_SAMPLES = np.min([10000, len(positions)])
     transf_tot = np.zeros((6,))
-    for it in range(0, 260):
+    for it in range(0, 160):
         if rospy.is_shutdown():
             break
         print("iteration {:d}:".format(it))
@@ -284,12 +284,12 @@ def put_tf_to_file(tf, fname):
 
 def put_errs_to_file(dists, errors, fname):
     with open(fname, 'w') as ofhandle:
-        ofhandle.write("error,distance\n")
+        ofhandle.write("error,speed\n")
         for it in range(0, len(dists)):
             ofhandle.write("{:f},{:f}\n".format(dists[it], errors[it]))
 
 def calc_statistics(positions1, tposs, FP_error):
-    errors = calc_errors(positions1, tposs)
+    errors = calc_errors_time(positions1, tposs)
     TPs = 0
     TNs = 0
     FPs = 0
@@ -305,6 +305,10 @@ def calc_statistics(positions1, tposs, FP_error):
             TPs += 1
 
     errors = np.array(errors, dtype=float)
+    nn_errors = errors[~np.isnan(errors)]
+    nfp_errors = nn_errors[np.logical_and(nn_errors >= 0, nn_errors <= FP_error)]
+    rospy.loginfo("Max. error: {:f}".format(np.max(nn_errors)))
+    rospy.loginfo("Mean error: {:f}, std.: {:f}".format(np.mean(nn_errors), np.std(nn_errors)))
     return (TPs, TNs, FPs, FNs, errors)
 
 def calc_probs(TPs, GTs):
@@ -368,7 +372,7 @@ def main():
     TP_prob_out_fname = rospy.get_param('~TP_probability_out_fname')
 
     # msgs = load_pickle(in_fname)
-    FP_error = 30.0 # meters
+    FP_error = 28.0 # meters
     # FP_error = float('Inf')
 
     rosbag_skip_time = 35
@@ -496,38 +500,9 @@ def main():
             gt_positions = gt_positions - gt_zero_pos
             # Find the transformed positions of GT which minimize RMSE with the localization
             loc_positions_time_aligned = time_align(gt_times, loc_positions, loc_times)
-            TP_mask = ~np.isnan(loc_positions_time_aligned[:, 0])
-            # TP_mask = np.logical_and(TP_mask, loc_positions_time_aligned[:, 0] < 6.0)
-            # TP_mask = np.logical_and(TP_mask, loc_positions_time_aligned[:, 1] > -100.0)
-            FP_mask1 = np.logical_and.reduce((
-                                        loc_positions_time_aligned[:, 1] > 2.0,
-                                        loc_positions_time_aligned[:, 2] < -3.0
-            ))
-            FP_mask2 = np.logical_and.reduce((
-                                        loc_positions_time_aligned[:, 0] < -2.0,
-                                        loc_positions_time_aligned[:, 2] < -3.0
-            ))
-            # FP_mask2 = np.logical_and.reduce((
-            #                             loc_positions_time_aligned[:, 2] < -2.9,
-            #                             loc_positions_time_aligned[:, 0] > 2.0, loc_positions_time_aligned[:, 0] < 4.0,
-            #                             loc_positions_time_aligned[:, 1] > 1.5, loc_positions_time_aligned[:, 1] < 4.0
-            # ))
-            # FP_mask3 = np.logical_and.reduce((
-            #                             loc_positions_time_aligned[:, 2] > 15.0,
-            # ))
-            FP_mask = np.logical_or.reduce((FP_mask1, FP_mask2))
-            TP_mask = np.logical_and(TP_mask, ~FP_mask)
-            loc_pos = loc_positions_time_aligned[TP_mask, :]
-    
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.grid()
-            ax.plot(loc_pos[:, 0], loc_pos[:, 1], loc_pos[:, 2], 'bo')
-            # ax.plot(loc_positions_time_aligned[~TP_mask, 0], loc_positions_time_aligned[~TP_mask, 1], loc_positions_time_aligned[~TP_mask, 2], 'gx')
-            ax.plot(gt_positions[:, 0], gt_positions[:, 1], gt_positions[:, 2], 'rx')
-            plt.show()
-
-            gt_pos = gt_positions[TP_mask, :]
+            nnons = ~np.isnan(loc_positions_time_aligned[:, 0])
+            loc_pos = loc_positions_time_aligned[nnons, :]
+            gt_pos = gt_positions[nnons, :]
             tf = find_min_tf(gt_pos, loc_pos, FP_error, only_rot=False)
             min_positions = transform_gt(gt_positions, tf)
             min_positions += zero_pos
@@ -563,14 +538,6 @@ def main():
 
     if gt_frombag:
         subtract(min_positions, gt_times, obs_positions, obs_times)
-    
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.grid()
-    # ax.plot(loc_positions[:, 0], loc_positions[:, 1], loc_positions[:, 2], 'bo')
-    # ax.plot(obs_positions[:, 0], obs_positions[:, 1], obs_positions[:, 2], 'gx')
-    # ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'rx')
-    # plt.show()
 
     # rot_pos = tf[6:9]
     # tf_tmp = tf[0:6]
@@ -588,6 +555,19 @@ def main():
     print("loc:", loc_times[0], loc_times[-1], loc_positions[0, :])
     print("gt:", gt_times[0], gt_times[-1], min_positions[0, :])
 
+    # rospy.loginfo("Done loading positions")
+    # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
+    # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.1, 0])
+    if tf_frombag:
+        rospy.loginfo('Saving TF [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}], [{:f}, {:f}, {:f}] to CSV: {:s}'.format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5], tf[6], tf[7], tf[8], tf_out_fname))
+        put_tf_to_file(tf, tf_out_fname)
+    if loc_frombag:
+        rospy.loginfo('Saving localizations to CSV: {:s}'.format(loc_out_fname))
+        put_to_file(loc_positions, loc_times, loc_out_fname)
+    if gt_frombag:
+        rospy.loginfo('Saving ground truths to CSV: {:s}'.format(gt_out_fname))
+        put_to_file(min_positions, gt_times, gt_out_fname)
+
     tposs = get_positions_time(min_positions, gt_times, loc_positions, loc_times)
     TPs, TNs, FPs, FNs, errors = calc_statistics(min_positions, tposs, FP_error)
     rospy.loginfo("TPs, TNs, FPs, FNs: {:d}, {:d}, {:d}, {:d}".format(TPs, TNs, FPs, FNs))
@@ -596,22 +576,28 @@ def main():
     recall = TPs/float(TPs + FNs)
     rospy.loginfo("precision, recall: {:f}, {:f}".format(precision, recall))
 
+    dt = np.mean(np.diff(gt_times))
+    print("average dt: {}".format(dt))
+    dposs = np.linalg.norm(np.diff(min_positions, axis=0), axis=1)
+    speeds = dposs/dt
+    speeds[speeds > 4.2] = np.nan
+    speeds = np.append(speeds, np.array((np.nan)))
+    # plt.plot(gt_times, speeds)
+    # plt.title("speeds")
+    # plt.xlabel("time (s)")
+    # plt.ylabel("speed (m/s)")
+    # plt.show()
+
+
     # error_over_distance = error/min_positions[:, 2]
     TP_mask = errors < FP_error
     TP_mask = np.logical_and(TP_mask, tposs[:, 0] < 6.0)
-    TP_mask = np.logical_and(TP_mask, tposs[:, 1] > -100.0)
     TP_mask = np.logical_and(TP_mask, tposs[:, 2] > -2.0)
     TP_errors = errors[TP_mask]
-    rospy.loginfo("Max. error: {:f}".format(np.max(TP_errors)))
-    rospy.loginfo("Mean error: {:f}, std.: {:f}".format(np.mean(TP_errors), np.std(TP_errors)))
     # TP_mask = np.ones((len(errors),), dtype=bool)
     dists = np.linalg.norm(min_positions, axis=1)
     est_dists = np.linalg.norm(tposs[TP_mask], axis=1)
-    TP_dists = dists[TP_mask]
-
-    plt.plot(TP_dists, TP_errors)
-    plt.show()
-
+    TP_speeds = speeds[TP_mask]
     # _, pos_hist_edges = np.histogram(dists, bins=20)
     # pos_hist, _ = np.histogram(dists, bins=pos_hist_edges)
     # pos_hist = np.array(pos_hist, dtype=float)
@@ -622,24 +608,19 @@ def main():
     # bin_width = pos_hist_edges[1] - pos_hist_edges[0]
     # pos_hist_centers = pos_hist_edges[0:-1] + bin_width/2
     # # dist = np.linspace(np.min(dists), np.max(dists), len(errors))
-    
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.grid()
-    # ax.plot(tposs[TP_mask, 0], tposs[TP_mask, 1], tposs[TP_mask, 2], 'bo')
-    # ax.plot(obs_positions[:, 0], obs_positions[:, 1], obs_positions[:, 2], 'gx')
-    # ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'rx')
-    # plt.show()
 
     # dists = dists[dists <= 18.0]
-    _, err_avg_edges = np.histogram(dists, bins=15)
+    speeds_nn = speeds[~np.isnan(speeds)]
+    _, err_avg_edges = np.histogram(speeds_nn, bins=18)
     err_bin_width = err_avg_edges[1] - err_avg_edges[0]
     err_avg_centers = err_avg_edges[0:-1] + err_bin_width/2
     err_avg = len(err_avg_centers)*[None]
+    print(err_avg_edges)
     for it in range(0, len(err_avg_edges)-1):
         low = err_avg_edges[it]
         high = err_avg_edges[it+1]
-        idxs = np.logical_and(TP_dists > low, TP_dists < high)
+        print(low, high)
+        idxs = np.logical_and(TP_speeds > low, TP_speeds < high)
         err_avg[it] = np.mean(TP_errors[idxs])
 
     # fig = plt.figure()
@@ -657,7 +638,9 @@ def main():
     # plt.plot(TP_dists, TP_errors, 'g.')
     # # plt.plot(pos_hist_centers, TP_hist, 'g.')
     # # plt.plot(pos_hist_centers, pos_hist, '.')
-    plt.title("Localization error over distance")
+    plt.title("Localization error over speed")
+    plt.xlabel("speed (m/s)")
+    plt.ylabel("RMSE (m)")
     plt.show()
     put_errs_to_file(err_avg_centers, err_avg, dist_err_out_fname)
     # put_errs_to_file(pos_hist_centers, TP_probs, TP_prob_out_fname)
@@ -671,19 +654,6 @@ def main():
     # ax.plot(loc_positions[:, 0], loc_positions[:, 1], loc_positions[:, 2], 'g.')
     # ax.plot([loc_positions[0, 0]], [loc_positions[0, 1]], [loc_positions[0, 2]], 'gx')
     # ax.plot([loc_positions[-1, 0]], [loc_positions[-1, 1]], [loc_positions[-1, 2]], 'go')
-
-    # rospy.loginfo("Done loading positions")
-    # loc_positions = transform_gt(gt_positions, [0, 0, -1.17, 0, 0, 0])
-    # loc_positions = loc_positions - loc_positions[0, :] + min_positions[0, :] + np.array([1, -1.1, 0])
-    if tf_frombag:
-        rospy.loginfo('Saving TF [{:f}, {:f}, {:f}, {:f}, {:f}, {:f}], [{:f}, {:f}, {:f}] to CSV: {:s}'.format(tf[0], tf[1], tf[2], tf[3], tf[4], tf[5], tf[6], tf[7], tf[8], tf_out_fname))
-        put_tf_to_file(tf, tf_out_fname)
-    if loc_frombag:
-        rospy.loginfo('Saving localizations to CSV: {:s}'.format(loc_out_fname))
-        put_to_file(loc_positions, loc_times, loc_out_fname)
-    if gt_frombag:
-        rospy.loginfo('Saving ground truths to CSV: {:s}'.format(gt_out_fname))
-        put_to_file(min_positions, gt_times, gt_out_fname)
 
     # # ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'r')
     # # ax.plot(min_positions[:, 0], min_positions[:, 1], min_positions[:, 2], 'b.')
@@ -701,3 +671,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -1,0 +1,53 @@
+\documentclass{standalone}
+\usepackage{pgfplots}
+\usepackage{bm}
+\usepackage{siunitx}
+\usepackage[export]{adjustbox}
+\usetikzlibrary{arrows, decorations.pathmorphing, backgrounds, positioning,fit,petri}
+\usetikzlibrary{calc}
+
+\usepackage{filecontents}
+
+\newcommand{\imw}{12cm}
+
+\begin{document}
+
+\begin{tikzpicture}
+
+  \begin{axis}
+    [
+    unit vector ratio*=1 1 1,
+    width=\imw,
+    grid=both,
+    minor tick num=3,
+    grid style={line width=.1pt, draw=gray!10},
+    major grid style={line width=.2pt,draw=gray!50},
+    xlabel={distance~(\si{\meter})},
+    ylabel={estimated distance~(\si{\meter})},
+    % x label style={at={(axis description cs:.5,-0.2)},anchor=south},
+    % y label style={at={(axis description cs:-0.05,.5)},anchor=south},
+    xmin = 0,
+    xmax = 35,
+    ymin = 0,
+    ymax = 35,
+    % ytick={-30,-20,...,60},
+    % xtick={-30,-20,...,60},
+    legend style={mark options={scale=3}},
+    legend pos=north east,
+    ]
+    \addplot [thick, red, mark=x, only marks]
+             [anchor=origin]
+       table [x=dist, y=error, col sep=comma, on layer=foreground] {err_over_dist.csv};
+
+    % \addplot [thick, green, domain=0:35]
+    %          [anchor=origin]
+    %          {x};
+
+%     \addplot [thick, blue, domain=0:35]
+%              [anchor=origin]
+%              {x/2};
+
+  \end{axis}
+\end{tikzpicture}
+
+\end{document} 
